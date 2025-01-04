@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 const ForgotPassword = () => {
     const [email, setEmail] = useState('');
@@ -22,13 +23,14 @@ const ForgotPassword = () => {
         setStatus({ type: '', message: '' });
 
         try {
-            const response = await axios.post('/api/auth/forgot-password', { email });
+            const response = await axios.post(`${API_URL}/api/auth/forgot-password`, { email });
             setStatus({
                 type: 'success',
                 message: 'Password reset email sent. Please check your inbox.'
             });
             setEmail('');
         } catch (error) {
+            console.error('Password reset error:', error);
             setStatus({
                 type: 'error',
                 message: error.response?.data?.message || 'Failed to send reset email'
