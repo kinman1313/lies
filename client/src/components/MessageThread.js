@@ -1,127 +1,222 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
+    Paper,
     Typography,
     IconButton,
     Collapse,
-    Paper,
-    Divider
+    Divider,
+    Avatar,
+    Badge,
+    Tooltip,
+    Button,
+    TextField,
+    List,
+    ListItem,
+    ListItemText,
+    ListItemAvatar
 } from '@mui/material';
 import {
+    Reply as ReplyIcon,
     ExpandMore as ExpandMoreIcon,
     ExpandLess as ExpandLessIcon,
-    Reply as ReplyIcon
+    Send as SendIcon,
+    Thread as ThreadIcon,
+    Close as CloseIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 const MessageThread = ({
-    parentMessage,
+    message,
     replies = [],
-    expanded,
-    onToggle,
     onReply,
-    children
+    onLoadMore,
+    hasMoreReplies = false,
+    isLoadingReplies = false
 }) => {
-    const replyCount = replies.length;
+    const { user: currentUser } = useAuth();
+    const [expanded, setExpanded] = useState(false);
+    const [replyText, setReplyText] = useState('');
+    const [showReplyInput, setShowReplyInput] = useState(false);
 
-    if (!parentMessage.replyTo && replyCount === 0) {
-        return children;
-    }
+    const handleReply = () => {
+        if (replyText.trim()) {
+            onReply({
+                text: replyText,
+                replyTo: message.id,
+                timestamp: new Date(),
+                user: {
+                    id: currentUser.id,
+                    username: currentUser.username,
+                    avatar: currentUser.profile?.avatar
+                }
+            });
+            setReplyText('');
+            setShowReplyInput(false);
+            setExpanded(true);
+        }
+    };
+
+    const formatTimestamp = (timestamp) => {
+        return new Date(timestamp).toLocaleString();
+    };
+
+    const handleKeyPress = (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            handleReply();
+        }
+    };
 
     return (
         <Box sx={{ mb: 2 }}>
-            {parentMessage.replyTo && (
-                <Box
-                    sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        mb: 1,
-                        pl: 2
-                    }}
-                >
-                    <ReplyIcon
-                        fontSize="small"
-                        sx={{ color: 'text.secondary', transform: 'scaleX(-1)' }}
-                    />
-                    <Typography
-                        variant="caption"
-                        sx={{
-                            color: 'text.secondary',
-                            fontStyle: 'italic'
-                        }}
-                    >
-                        Replying to {parentMessage.replyTo.username}
-                    </Typography>
-                </Box>
-            )}
-
-            {children}
-
-            {replyCount > 0 && (
-                <>
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            mt: 1,
-                            pl: 2
-                        }}
-                    >
-                        <IconButton
-                            size="small"
-                            onClick={onToggle}
-                            sx={{ p: 0.5 }}
-                        >
-                            {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                        </IconButton>
-                        <Typography
-                            variant="caption"
-                            sx={{
-                                color: 'text.secondary',
-                                cursor: 'pointer'
-                            }}
-                            onClick={onToggle}
-                        >
-                            {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
-                        </Typography>
-                    </Box>
-
-                    <Collapse in={expanded}>
-                        <Box
-                            sx={{
-                                pl: 4,
-                                mt: 1,
-                                borderLeft: '2px solid',
-                                borderColor: 'divider'
-                            }}
-                        >
-                            <AnimatePresence>
-                                {replies.map((reply, index) => (
-                                    <motion.div
-                                        key={reply.id}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{
-                                            type: 'spring',
-                                            stiffness: 500,
-                                            damping: 30,
-                                            delay: index * 0.1
-                                        }}
-                                    >
-                                        {reply}
-                                        {index < replies.length - 1 && (
-                                            <Divider sx={{ my: 1 }} />
-                                        )}
-                                    </motion.div>
-                                ))}
-                            </AnimatePresence>
+            <Paper
+                variant="outlined"
+                sx={{
+                    p: 2,
+                    bgcolor: 'background.paper',
+                    position: 'relative'
+                }}
+            >
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                    <Avatar src={message.user.avatar?.url}>
+                        {message.user.username[0].toUpperCase()}
+                    </Avatar>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            <Typography variant="subtitle2">
+                                {message.user.username}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {formatTimestamp(message.timestamp)}
+                            </Typography>
                         </Box>
-                    </Collapse>
-                </>
-            )}
+                        <Typography variant="body1">
+                            {message.text}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                            <Button
+                                size="small"
+                                startIcon={<ReplyIcon />}
+                                onClick={() => setShowReplyInput(!showReplyInput)}
+                                sx={{ mr: 2 }}
+                            >
+                                Reply
+                            </Button>
+                            {replies.length > 0 && (
+                                <Button
+                                    size="small"
+                                    startIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                    onClick={() => setExpanded(!expanded)}
+                                >
+                                    {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+                                </Button>
+                            )}
+                        </Box>
+                    </Box>
+                </Box>
+
+                <AnimatePresence>
+                    {showReplyInput && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                        >
+                            <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                                <Avatar
+                                    src={currentUser.profile?.avatar?.url}
+                                    sx={{ width: 32, height: 32 }}
+                                >
+                                    {currentUser.username[0].toUpperCase()}
+                                </Avatar>
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        maxRows={4}
+                                        placeholder="Write a reply..."
+                                        value={replyText}
+                                        onChange={(e) => setReplyText(e.target.value)}
+                                        onKeyPress={handleKeyPress}
+                                        size="small"
+                                        InputProps={{
+                                            endAdornment: (
+                                                <IconButton
+                                                    onClick={handleReply}
+                                                    disabled={!replyText.trim()}
+                                                    color="primary"
+                                                >
+                                                    <SendIcon />
+                                                </IconButton>
+                                            )
+                                        }}
+                                    />
+                                </Box>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setShowReplyInput(false)}
+                                >
+                                    <CloseIcon />
+                                </IconButton>
+                            </Box>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <Collapse in={expanded}>
+                    {replies.length > 0 && (
+                        <Box sx={{ mt: 2, ml: 6 }}>
+                            <List disablePadding>
+                                {replies.map((reply, index) => (
+                                    <React.Fragment key={reply.id}>
+                                        <ListItem
+                                            alignItems="flex-start"
+                                            sx={{ px: 0 }}
+                                        >
+                                            <ListItemAvatar>
+                                                <Avatar
+                                                    src={reply.user.avatar?.url}
+                                                    sx={{ width: 32, height: 32 }}
+                                                >
+                                                    {reply.user.username[0].toUpperCase()}
+                                                </Avatar>
+                                            </ListItemAvatar>
+                                            <ListItemText
+                                                primary={
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <Typography variant="subtitle2">
+                                                            {reply.user.username}
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {formatTimestamp(reply.timestamp)}
+                                                        </Typography>
+                                                    </Box>
+                                                }
+                                                secondary={reply.text}
+                                            />
+                                        </ListItem>
+                                        {index < replies.length - 1 && (
+                                            <Divider variant="inset" component="li" />
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </List>
+                            {hasMoreReplies && (
+                                <Button
+                                    fullWidth
+                                    onClick={onLoadMore}
+                                    disabled={isLoadingReplies}
+                                    sx={{ mt: 1 }}
+                                >
+                                    {isLoadingReplies ? 'Loading...' : 'Load more replies'}
+                                </Button>
+                            )}
+                        </Box>
+                    )}
+                </Collapse>
+            </Paper>
         </Box>
     );
 };
