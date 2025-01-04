@@ -27,6 +27,44 @@ const userSchema = new mongoose.Schema({
         required: true,
         minlength: 6,
         trim: true
+    },
+    preferences: {
+        theme: {
+            type: String,
+            enum: ['dark', 'light'],
+            default: 'dark'
+        },
+        messageColor: {
+            type: String,
+            default: '#7C4DFF'
+        },
+        bubbleStyle: {
+            type: String,
+            enum: ['modern', 'classic', 'minimal'],
+            default: 'modern'
+        },
+        soundEnabled: {
+            type: Boolean,
+            default: true
+        },
+        notificationSound: {
+            type: String,
+            enum: ['default', 'subtle', 'none'],
+            default: 'default'
+        },
+        messageSound: {
+            type: String,
+            enum: ['default', 'subtle', 'none'],
+            default: 'default'
+        },
+        animations: {
+            type: Boolean,
+            default: true
+        }
+    },
+    lastActiveRoom: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Room'
     }
 }, {
     timestamps: true
