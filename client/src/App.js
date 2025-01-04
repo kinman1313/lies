@@ -6,7 +6,40 @@ import Register from './components/Register';
 import Chat from './components/Chat';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline, createTheme } from '@mui/material';
+
+// Create theme
+const theme = createTheme({
+    palette: {
+        mode: 'dark',
+        primary: {
+            main: '#7C4DFF',
+        },
+        secondary: {
+            main: '#69F0AE',
+        },
+        background: {
+            default: '#121212',
+            paper: '#1E1E1E',
+        },
+    },
+    components: {
+        MuiButton: {
+            styleOverrides: {
+                root: {
+                    borderRadius: 8,
+                },
+            },
+        },
+        MuiPaper: {
+            styleOverrides: {
+                root: {
+                    borderRadius: 12,
+                },
+            },
+        },
+    },
+});
 
 // Protected Route Component
 const PrivateRoute = ({ children }) => {
@@ -23,7 +56,7 @@ const PublicRoute = ({ children }) => {
 // Chat component (moved from previous App.js)
 function App() {
     return (
-        <ThemeProvider>
+        <ThemeProvider theme={theme}>
             <CssBaseline />
             <AuthProvider>
                 <Router>
