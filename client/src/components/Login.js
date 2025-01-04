@@ -9,7 +9,9 @@ import {
     Typography,
     Link,
     Box,
-    Alert
+    Alert,
+    CircularProgress,
+    Divider
 } from '@mui/material';
 import LoadingButton from '@mui/lab/LoadingButton';
 
@@ -72,25 +74,41 @@ export default function Login() {
                             autoComplete="current-password"
                         />
 
-                        <LoadingButton
+                        <Button
                             type="submit"
                             variant="contained"
                             fullWidth
                             size="large"
-                            loading={loading}
-                            sx={{ mt: 3, mb: 2 }}
+                            disabled={loading}
                         >
-                            Login
-                        </LoadingButton>
+                            {loading ? <CircularProgress size={24} /> : 'Login'}
+                        </Button>
 
-                        <Box sx={{ textAlign: 'center' }}>
-                            <Typography variant="body2">
-                                Don't have an account?{' '}
-                                <Link component={RouterLink} to="/register">
-                                    Sign Up
-                                </Link>
-                            </Typography>
+                        <Box sx={{ mt: 2, textAlign: 'center' }}>
+                            <Button
+                                component={RouterLink}
+                                to="/forgot-password"
+                                variant="text"
+                                color="primary"
+                            >
+                                Forgot Password?
+                            </Button>
                         </Box>
+
+                        <Divider sx={{ my: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                OR
+                            </Typography>
+                        </Divider>
+
+                        <Button
+                            component={RouterLink}
+                            to="/register"
+                            variant="outlined"
+                            fullWidth
+                        >
+                            Create an Account
+                        </Button>
                     </form>
                 </Paper>
             </Box>

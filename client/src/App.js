@@ -4,6 +4,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import Chat from './components/Chat';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 
 // Protected Route Component
 const PrivateRoute = ({ children }) => {
@@ -20,28 +23,27 @@ const PublicRoute = ({ children }) => {
 // Chat component (moved from previous App.js)
 function App() {
     return (
-        <Router>
+        <ThemeProvider>
+            <CssBaseline />
             <AuthProvider>
-                <Routes>
-                    <Route path="/login" element={
-                        <PublicRoute>
-                            <Login />
-                        </PublicRoute>
-                    } />
-                    <Route path="/register" element={
-                        <PublicRoute>
-                            <Register />
-                        </PublicRoute>
-                    } />
-                    <Route path="/chat" element={
-                        <PrivateRoute>
-                            <Chat />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/" element={<Navigate to="/chat" />} />
-                </Routes>
+                <Router>
+                    <Routes>
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route path="/forgot-password" element={<ForgotPassword />} />
+                        <Route path="/reset-password/:token" element={<ResetPassword />} />
+                        <Route
+                            path="/*"
+                            element={
+                                <PrivateRoute>
+                                    <Chat />
+                                </PrivateRoute>
+                            }
+                        />
+                    </Routes>
+                </Router>
             </AuthProvider>
-        </Router>
+        </ThemeProvider>
     );
 }
 
