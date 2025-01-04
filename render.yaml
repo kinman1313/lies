@@ -14,10 +14,11 @@ services:
       - key: PORT
         value: 8080
 
-  - type: static
+  - type: web
     name: lies-client
     env: static
     region: ohio
+    plan: free
     buildCommand: cd client && npm install && npm run build
     staticPublishPath: ./client/build
     routes:
