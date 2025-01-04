@@ -19,24 +19,34 @@ const server = http.createServer(app);
 // Configure CORS
 const allowedOrigins = [
     'http://localhost:3000',
-    'https://chat-app-client.onrender.com'
+    'https://lies-client.onrender.com',
+    'https://lies-client.onrender.com/'
 ];
 
+// CORS middleware configuration
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    optionsSuccessStatus: 200
 }));
 
+// Socket.IO CORS configuration
 const io = socketIO(server, {
     cors: {
         origin: allowedOrigins,
         methods: ["GET", "POST"],
+        allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true
     }
 });
