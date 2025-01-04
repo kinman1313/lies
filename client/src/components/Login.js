@@ -28,10 +28,18 @@ export default function Login() {
         try {
             setError('');
             setLoading(true);
-            await login(email, password);
-            navigate('/chat');
+            console.log('Submitting login form:', { email });
+            const result = await login(email, password);
+            if (result.success) {
+                console.log('Login successful, navigating to chat');
+                navigate('/chat');
+            } else {
+                console.error('Login failed:', result.message);
+                setError(result.message);
+            }
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to login');
+            console.error('Login submission error:', err);
+            setError(err.response?.data?.message || 'Failed to login');
         } finally {
             setLoading(false);
         }

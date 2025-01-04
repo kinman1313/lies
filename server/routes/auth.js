@@ -8,17 +8,25 @@ const User = require('../models/User');
 // Login route
 router.post('/login', async (req, res) => {
     try {
+        console.log('Login attempt:', { email: req.body.email });
         const { email, password } = req.body;
+
+        if (!email || !password) {
+            console.log('Missing credentials:', { email: !!email, password: !!password });
+            return res.status(400).json({ message: 'Email and password are required' });
+        }
 
         // Find user by email
         const user = await User.findOne({ email });
         if (!user) {
+            console.log('User not found:', { email });
             return res.status(400).json({ message: 'Invalid email or password' });
         }
 
         // Check password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
+            console.log('Invalid password for user:', { email });
             return res.status(400).json({ message: 'Invalid email or password' });
         }
 
@@ -31,12 +39,17 @@ router.post('/login', async (req, res) => {
 
         // Send response without password
         const { password: _, ...userWithoutPassword } = user.toObject();
+        console.log('Login successful:', { email, userId: user._id });
         res.json({
             token,
             user: userWithoutPassword
         });
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('Login error details:', {
+            error: error.message,
+            stack: error.stack,
+            body: req.body
+        });
         res.status(500).json({ message: 'Error logging in' });
     }
 });
