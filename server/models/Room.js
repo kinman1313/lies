@@ -1,56 +1,164 @@
 const mongoose = require('mongoose');
 
+const memberSchema = new mongoose.Schema({
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    role: {
+        type: String,
+        enum: ['owner', 'admin', 'member'],
+        default: 'member'
+    },
+    joinedAt: {
+        type: Date,
+        default: Date.now
+    },
+    notificationSettings: {
+        mentions: {
+            type: Boolean,
+            default: true
+        },
+        messages: {
+            type: Boolean,
+            default: true
+        },
+        reactions: {
+            type: Boolean,
+            default: true
+        }
+    }
+});
+
+const invitationSchema = new mongoose.Schema({
+    invitedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    invitedUser: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    status: {
+        type: String,
+        enum: ['pending', 'accepted', 'rejected'],
+        default: 'pending'
+    },
+    expiresAt: Date,
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+const pinnedMessageSchema = new mongoose.Schema({
+    message: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Message',
+        required: true
+    },
+    pinnedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    pinnedAt: {
+        type: Date,
+        default: Date.now
+    }
+});
+
 const roomSchema = new mongoose.Schema({
     name: {
-        type: String,
-        required: true,
-        trim: true,
-        unique: true
-    },
-    topic: {
         type: String,
         required: true,
         trim: true
     },
     description: {
         type: String,
-        trim: true,
-        default: ''
+        trim: true
     },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
+    type: {
+        type: String,
+        enum: ['public', 'private', 'direct'],
+        default: 'public'
     },
-    isPrivate: {
-        type: Boolean,
-        default: false
+    avatar: {
+        url: String,
+        color: String
     },
-    members: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+    categories: [{
+        type: String,
+        trim: true
     }],
-    customization: {
-        backgroundColor: {
-            type: String,
-            default: '#132F4C'
+    tags: [{
+        type: String,
+        trim: true
+    }],
+    members: [memberSchema],
+    invitations: [invitationSchema],
+    pinnedMessages: [pinnedMessageSchema],
+    settings: {
+        allowInvites: {
+            type: Boolean,
+            default: true
         },
-        textColor: {
-            type: String,
-            default: '#FFFFFF'
+        allowFileSharing: {
+            type: Boolean,
+            default: true
         },
-        bubbleStyle: {
+        maxFileSize: {
+            type: Number,
+            default: 10 * 1024 * 1024 // 10MB
+        },
+        allowedFileTypes: [{
             type: String,
-            enum: ['modern', 'classic', 'minimal'],
-            default: 'modern'
+            default: ['image/*', 'application/pdf']
+        }],
+        requireApproval: {
+            type: Boolean,
+            default: false
+        },
+        readOnly: {
+            type: Boolean,
+            default: false
+        },
+        slowMode: {
+            enabled: {
+                type: Boolean,
+                default: false
+            },
+            delay: {
+                type: Number,
+                default: 0
+            }
+        }
+    },
+    metadata: {
+        messageCount: {
+            type: Number,
+            default: 0
+        },
+        lastActivity: Date,
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
         }
     }
 }, {
     timestamps: true
 });
 
-// Index for searching rooms
-roomSchema.index({ name: 'text', topic: 'text', description: 'text' });
+// Indexes for faster queries
+roomSchema.index({ name: 'text', description: 'text' });
+roomSchema.index({ categories: 1 });
+roomSchema.index({ tags: 1 });
+roomSchema.index({ 'members.user': 1 });
+roomSchema.index({ type: 1 });
+roomSchema.index({ 'invitations.invitedUser': 1 });
 
 const Room = mongoose.model('Room', roomSchema);
 module.exports = Room; 

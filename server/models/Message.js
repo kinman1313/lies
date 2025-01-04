@@ -8,10 +8,31 @@ const reactionSchema = new mongoose.Schema({
     }]
 });
 
+const fileAttachmentSchema = new mongoose.Schema({
+    url: {
+        type: String,
+        required: true
+    },
+    filename: {
+        type: String,
+        required: true
+    },
+    size: Number,
+    type: String,
+    metadata: {
+        width: Number,
+        height: Number,
+        duration: Number,
+        thumbnail: String
+    }
+});
+
 const messageSchema = new mongoose.Schema({
     text: {
         type: String,
-        required: true,
+        required: function () {
+            return !this.attachments || this.attachments.length === 0;
+        },
         trim: true
     },
     username: {
@@ -34,10 +55,10 @@ const messageSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['text', 'gif'],
+        enum: ['text', 'gif', 'file'],
         default: 'text'
     },
-    // New fields for enhanced features
+    attachments: [fileAttachmentSchema],
     reactions: [reactionSchema],
     editHistory: [{
         text: String,
@@ -55,14 +76,39 @@ const messageSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    deletedAt: Date
+    isPinned: {
+        type: Boolean,
+        default: false
+    },
+    pinnedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    pinnedAt: Date,
+    deletedAt: Date,
+    metadata: {
+        clientId: String,
+        readBy: [{
+            user: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User'
+            },
+            readAt: {
+                type: Date,
+                default: Date.now
+            }
+        }]
+    }
 }, {
     timestamps: true
 });
 
-// Add index for faster message searches
+// Add indexes for faster message searches
 messageSchema.index({ room: 1, createdAt: -1 });
 messageSchema.index({ mentions: 1 });
+messageSchema.index({ 'metadata.clientId': 1 });
+messageSchema.index({ isPinned: 1 });
+messageSchema.index({ text: 'text' });
 
 const Message = mongoose.model('Message', messageSchema);
 module.exports = Message; 
