@@ -8,56 +8,101 @@ const User = require('../models/User');
 // Login route
 router.post('/login', async (req, res) => {
     try {
-        console.log('Login attempt:', { email: req.body.email });
+        console.log('Login attempt:', {
+            email: req.body.email
+        });
+
         const { email, password } = req.body;
 
+        // Validate input
         if (!email || !password) {
-            console.log('Missing credentials:', { email: !!email, password: !!password });
-            return res.status(400).json({ message: 'Email and password are required' });
+            console.log('Missing login fields:', {
+                hasEmail: !!email,
+                hasPassword: !!password
+            });
+            return res.status(400).json({
+                message: 'Email and password are required'
+            });
         }
 
         // Find user by email
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase().trim() });
+
         if (!user) {
             console.log('User not found:', { email });
-            return res.status(400).json({ message: 'Invalid email or password' });
+            return res.status(400).json({
+                message: 'Invalid email or password'
+            });
         }
 
-        // Check password using the model method
+        // Check password
         const validPassword = await user.checkPassword(password);
+
         if (!validPassword) {
             console.log('Invalid password for user:', { email });
-            return res.status(400).json({ message: 'Invalid email or password' });
+            return res.status(400).json({
+                message: 'Invalid email or password'
+            });
         }
 
-        // Generate auth token using the model method
+        // Generate auth token
         const token = await user.generateAuthToken();
+
+        console.log('Login successful:', {
+            userId: user._id,
+            email: user.email
+        });
 
         // Send response without password
         const { password: _, ...userWithoutPassword } = user.toObject();
-        console.log('Login successful:', { email, userId: user._id });
         res.json({
             token,
             user: userWithoutPassword
         });
     } catch (error) {
-        console.error('Login error details:', {
-            error: error.message,
-            stack: error.stack,
-            body: req.body
+        console.error('Login error:', {
+            message: error.message,
+            stack: error.stack
         });
-        res.status(500).json({ message: 'Error logging in' });
+        res.status(500).json({
+            message: 'Error logging in',
+            details: error.message
+        });
     }
 });
 
 // Register route
 router.post('/register', async (req, res) => {
     try {
+        console.log('Registration attempt:', {
+            email: req.body.email,
+            username: req.body.username
+        });
+
         const { username, email, password } = req.body;
 
+        // Validate input
+        if (!username || !email || !password) {
+            console.log('Missing registration fields:', {
+                hasUsername: !!username,
+                hasEmail: !!email,
+                hasPassword: !!password
+            });
+            return res.status(400).json({
+                message: 'All fields are required'
+            });
+        }
+
         // Check if user already exists
-        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+        const existingUser = await User.findOne({
+            $or: [{ email }, { username }]
+        });
+
         if (existingUser) {
+            console.log('User already exists:', {
+                existingEmail: existingUser.email === email,
+                existingUsername: existingUser.username === username
+            });
             return res.status(400).json({
                 message: existingUser.email === email
                     ? 'Email already registered'
@@ -65,26 +110,22 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
         // Create new user
         const user = new User({
             username,
             email,
-            password: hashedPassword
+            password // Password will be hashed by the pre-save hook
         });
 
         // Save user
         await user.save();
+        console.log('User registered successfully:', {
+            userId: user._id,
+            email: user.email
+        });
 
-        // Create and assign token
-        const token = jwt.sign(
-            { id: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
+        // Generate auth token
+        const token = await user.generateAuthToken();
 
         // Send response without password
         const { password: _, ...userWithoutPassword } = user.toObject();
@@ -93,8 +134,14 @@ router.post('/register', async (req, res) => {
             user: userWithoutPassword
         });
     } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ message: 'Error registering user' });
+        console.error('Registration error:', {
+            message: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({
+            message: 'Error registering user',
+            details: error.message
+        });
     }
 });
 

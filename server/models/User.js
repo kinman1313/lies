@@ -166,7 +166,24 @@ userSchema.pre('save', async function (next) {
 
 // Method to check password
 userSchema.methods.checkPassword = async function (password) {
-    return bcrypt.compare(password, this.password);
+    try {
+        console.log('Checking password for user:', {
+            email: this.email,
+            hasPassword: !!this.password
+        });
+        const isMatch = await bcrypt.compare(password, this.password);
+        console.log('Password check result:', {
+            email: this.email,
+            isMatch
+        });
+        return isMatch;
+    } catch (error) {
+        console.error('Password check error:', {
+            message: error.message,
+            stack: error.stack
+        });
+        throw error;
+    }
 };
 
 // Method to generate auth token
