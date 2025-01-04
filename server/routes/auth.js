@@ -5,7 +5,89 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 
-// ... existing code ...
+// Login route
+router.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Find user by email
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid email or password' });
+        }
+
+        // Check password
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(400).json({ message: 'Invalid email or password' });
+        }
+
+        // Create and assign token
+        const token = jwt.sign(
+            { id: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // Send response without password
+        const { password: _, ...userWithoutPassword } = user.toObject();
+        res.json({
+            token,
+            user: userWithoutPassword
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Error logging in' });
+    }
+});
+
+// Register route
+router.post('/register', async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+        if (existingUser) {
+            return res.status(400).json({
+                message: existingUser.email === email
+                    ? 'Email already registered'
+                    : 'Username already taken'
+            });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Create new user
+        const user = new User({
+            username,
+            email,
+            password: hashedPassword
+        });
+
+        // Save user
+        await user.save();
+
+        // Create and assign token
+        const token = jwt.sign(
+            { id: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // Send response without password
+        const { password: _, ...userWithoutPassword } = user.toObject();
+        res.status(201).json({
+            token,
+            user: userWithoutPassword
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ message: 'Error registering user' });
+    }
+});
 
 // Generate password reset token
 router.post('/forgot-password', async (req, res) => {
