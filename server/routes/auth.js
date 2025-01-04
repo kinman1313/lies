@@ -23,19 +23,15 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ message: 'Invalid email or password' });
         }
 
-        // Check password
-        const validPassword = await bcrypt.compare(password, user.password);
+        // Check password using the model method
+        const validPassword = await user.checkPassword(password);
         if (!validPassword) {
             console.log('Invalid password for user:', { email });
             return res.status(400).json({ message: 'Invalid email or password' });
         }
 
-        // Create and assign token
-        const token = jwt.sign(
-            { id: user._id },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
+        // Generate auth token using the model method
+        const token = await user.generateAuthToken();
 
         // Send response without password
         const { password: _, ...userWithoutPassword } = user.toObject();
