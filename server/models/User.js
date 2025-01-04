@@ -75,6 +75,8 @@ const userSchema = new mongoose.Schema({
         required: true,
         minLength: 8
     },
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
     profile: profileSchema,
     friends: [{
         user: {
