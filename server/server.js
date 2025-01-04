@@ -15,19 +15,42 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 const app = express();
 const server = http.createServer(app);
+
+// Configure CORS
+const allowedOrigins = [
+    'http://localhost:3000',
+    'https://chat-app-client.onrender.com'
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
+
 const io = socketIO(server, {
     cors: {
-        origin: "http://localhost:3000",
-        methods: ["GET", "POST"]
+        origin: allowedOrigins,
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 
-app.use(cors());
 app.use(express.json());
 
 // Import routes
 const userRoutes = require('./routes/users');
 app.use('/api/users', userRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
 
 // Store connected users
 const users = new Map();
@@ -63,7 +86,7 @@ app.use((err, req, res, next) => {
     res.status(500).send('Something broke!');
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 }); 
