@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { API_URL } from '../config';
 import {
     Box,
     Paper,
@@ -41,7 +42,7 @@ const ResetPassword = () => {
         setStatus({ type: '', message: '' });
 
         try {
-            const response = await axios.post(`/api/auth/reset-password/${token}`, {
+            const response = await axios.post(`${API_URL}/api/auth/reset-password/${token}`, {
                 newPassword
             });
             setStatus({
