@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import LoadingButton from '@mui/lab/LoadingButton';
 import axios from 'axios';
+import { config } from '../config';
 
 export default function ResetPassword() {
     const [email, setEmail] = useState('');
@@ -27,10 +28,12 @@ export default function ResetPassword() {
             setMessage('');
             setLoading(true);
 
-            const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/reset-password`, { email });
+            const response = await axios.post(`${config.API_URL}/api/users/reset-password`, { email });
             setMessage('Password reset instructions have been sent to your email.');
+            console.log('Reset Token (for testing):', response.data.resetToken);
         } catch (err) {
             setError(err.response?.data?.error || 'Failed to reset password');
+            console.error('Reset password error:', err);
         } finally {
             setLoading(false);
         }
