@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import Chat from './components/Chat';
+import ResetPassword from './components/ResetPassword';
 
 // Protected Route Component
 const PrivateRoute = ({ children }) => {
@@ -31,6 +32,11 @@ function App() {
                     <Route path="/register" element={
                         <PublicRoute>
                             <Register />
+                        </PublicRoute>
+                    } />
+                    <Route path="/reset-password" element={
+                        <PublicRoute>
+                            <ResetPassword />
                         </PublicRoute>
                     } />
                     <Route path="/chat" element={

@@ -83,13 +83,13 @@ export default function Login() {
                             Login
                         </LoadingButton>
 
-                        <Box sx={{ textAlign: 'center' }}>
-                            <Typography variant="body2">
-                                Don't have an account?{' '}
-                                <Link component={RouterLink} to="/register">
-                                    Sign Up
-                                </Link>
-                            </Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Link component={RouterLink} to="/register" variant="body2">
+                                {"Don't have an account? Sign Up"}
+                            </Link>
+                            <Link component={RouterLink} to="/reset-password" variant="body2">
+                                {"Forgot Password?"}
+                            </Link>
                         </Box>
                     </form>
                 </Paper>
