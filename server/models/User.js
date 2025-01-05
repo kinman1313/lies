@@ -75,6 +75,8 @@ const userSchema = new mongoose.Schema({
         required: true,
         minLength: 8
     },
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
     profile: profileSchema,
     friends: [{
         user: {
@@ -181,6 +183,19 @@ userSchema.index({ username: 'text', 'profile.displayName': 'text' });
 userSchema.index({ email: 1 });
 userSchema.index({ isOnline: 1 });
 userSchema.index({ 'friends.user': 1, 'friends.status': 1 });
+
+// Find user by credentials
+userSchema.statics.findByCredentials = async (email, password) => {
+    const user = await User.findOne({ email });
+    if (!user) {
+        throw new Error('Invalid login credentials');
+    }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+        throw new Error('Invalid login credentials');
+    }
+    return user;
+};
 
 const User = mongoose.model('User', userSchema);
 module.exports = User; 

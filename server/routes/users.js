@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 const router = express.Router();
@@ -95,6 +96,61 @@ router.patch('/me', auth, async (req, res) => {
         });
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+});
+
+// Request password reset
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ error: 'No account with that email address exists.' });
+        }
+
+        // Generate reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+        await user.save();
+
+        // TODO: Send email with reset token
+        // For now, we'll just return the token in the response
+        res.json({
+            message: 'Password reset email sent.',
+            // Remove this in production
+            resetToken: resetToken
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error processing your request.' });
+    }
+});
+
+// Reset password with token
+router.post('/reset-password/:token', async (req, res) => {
+    try {
+        const { password } = req.body;
+        const { token } = req.params;
+
+        const user = await User.findOne({
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ error: 'Password reset token is invalid or has expired.' });
+        }
+
+        // Set new password
+        user.password = password;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+        await user.save();
+
+        res.json({ message: 'Password has been reset.' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error resetting password.' });
     }
 });
 
