@@ -199,17 +199,25 @@ router.post('/forgot-password', async (req, res) => {
 // Reset password with token
 router.post('/reset-password/:token', async (req, res) => {
     try {
+        console.log('Reset password attempt with token');
         const { token } = req.params;
         const { newPassword } = req.body;
 
+        // Find user with valid reset token
         const user = await User.findOne({
             resetPasswordToken: token,
             resetPasswordExpires: { $gt: Date.now() }
         });
 
         if (!user) {
+            console.log('Invalid or expired reset token');
             return res.status(400).json({ message: 'Invalid or expired reset token' });
         }
+
+        console.log('Found user for password reset:', {
+            userId: user._id,
+            email: user.email
+        });
 
         // Hash new password
         const salt = await bcrypt.genSalt(10);
@@ -219,12 +227,30 @@ router.post('/reset-password/:token', async (req, res) => {
         user.password = hashedPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
-        await user.save();
 
-        res.json({ message: 'Password successfully reset' });
+        // Save user with new password
+        await user.save();
+        console.log('Password reset successful for user:', {
+            userId: user._id,
+            email: user.email
+        });
+
+        // Generate new auth token
+        const authToken = await user.generateAuthToken();
+
+        res.json({
+            message: 'Password successfully reset',
+            token: authToken
+        });
     } catch (error) {
-        console.error('Password reset error:', error);
-        res.status(500).json({ message: 'Error resetting password' });
+        console.error('Password reset error:', {
+            message: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({
+            message: 'Error resetting password',
+            details: error.message
+        });
     }
 });
 
