@@ -26,9 +26,20 @@ import {
     Menu as MenuIcon,
     Send as SendIcon,
     ExitToApp as LogoutIcon,
-    Person as PersonIcon
+    Person as PersonIcon,
+    Gif as GifIcon,
+    Mic as MicIcon,
+    Schedule as ScheduleIcon,
+    EmojiEmotions as EmojiIcon
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
+import TypingIndicator from './TypingIndicator';
+import MessageReactions from './MessageReactions';
+import MessageThread from './MessageThread';
+import GifPicker from './GifPicker';
+import VoiceMessage from './VoiceMessage';
+import MessageScheduler from './MessageScheduler';
+import UserProfile from './UserProfile';
 
 const drawerWidth = 240;
 
@@ -38,9 +49,16 @@ export default function Chat() {
     const [messageInput, setMessageInput] = useState('');
     const [users, setUsers] = useState([]);
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [typingUsers, setTypingUsers] = useState([]);
+    const [showGifPicker, setShowGifPicker] = useState(false);
+    const [showVoiceMessage, setShowVoiceMessage] = useState(false);
+    const [showScheduler, setShowScheduler] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [scheduledMessages, setScheduledMessages] = useState([]);
     const messagesEndRef = useRef(null);
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const typingTimeoutRef = useRef(null);
 
     useEffect(() => {
         const newSocket = io(config.SOCKET_URL, {
@@ -79,23 +97,78 @@ export default function Chat() {
             setUsers(users);
         });
 
+        socket.on('typing', ({ username }) => {
+            if (username !== user.username) {
+                setTypingUsers(prev => {
+                    if (!prev.includes(username)) {
+                        return [...prev, username];
+                    }
+                    return prev;
+                });
+            }
+        });
+
+        socket.on('stopTyping', ({ username }) => {
+            setTypingUsers(prev => prev.filter(user => user !== username));
+        });
+
         return () => {
             socket.off('message');
             socket.off('userJoined');
             socket.off('userLeft');
+            socket.off('typing');
+            socket.off('stopTyping');
         };
-    }, [socket]);
+    }, [socket, user.username]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    const emitTyping = () => {
+        if (socket) {
+            socket.emit('typing', { username: user.username });
+
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+
+            typingTimeoutRef.current = setTimeout(() => {
+                socket.emit('stopTyping', { username: user.username });
+            }, 1000);
+        }
+    };
+
+    const handleInputChange = (e) => {
+        setMessageInput(e.target.value);
+        emitTyping();
+    };
 
     const handleSendMessage = (e) => {
         e.preventDefault();
         if (messageInput.trim() && socket) {
             socket.emit('message', messageInput);
             setMessageInput('');
+            socket.emit('stopTyping', { username: user.username });
         }
+    };
+
+    const handleGifSelect = (gif) => {
+        if (socket) {
+            socket.emit('message', `[GIF] ${gif.url}`);
+            setShowGifPicker(false);
+        }
+    };
+
+    const handleVoiceMessage = (audioUrl) => {
+        if (socket) {
+            socket.emit('message', `[VOICE] ${audioUrl}`);
+        }
+    };
+
+    const handleScheduleMessage = (scheduleData) => {
+        setScheduledMessages(prev => [...prev, scheduleData]);
+        // Here you would typically also send this to the server
     };
 
     const handleLogout = async () => {
@@ -155,9 +228,7 @@ export default function Chat() {
                     <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
                         Chat Room
                     </Typography>
-                    <Typography variant="subtitle1" sx={{ display: { xs: 'none', sm: 'block' } }}>
-                        Welcome, {user.username}
-                    </Typography>
+                    <UserProfile user={user} />
                 </Toolbar>
             </AppBar>
 
@@ -204,9 +275,24 @@ export default function Chat() {
                 >
                     <List sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
                         {messages.map((message, index) => (
-                            <ListItem key={index} sx={{
-                                justifyContent: message.username === user.username ? 'flex-end' : 'flex-start'
-                            }}>
+                            <MessageThread
+                                key={index}
+                                message={{
+                                    ...message,
+                                    id: index,
+                                    user: {
+                                        id: message.username,
+                                        username: message.username,
+                                        avatar: null
+                                    }
+                                }}
+                                replies={[]}
+                                onReply={(reply) => {
+                                    if (socket) {
+                                        socket.emit('message', `@${message.username} ${reply.text}`);
+                                    }
+                                }}
+                            >
                                 <Paper
                                     elevation={1}
                                     sx={{
@@ -241,26 +327,109 @@ export default function Chat() {
                                             )
                                         }
                                         secondary={
-                                            <Typography
-                                                variant="caption"
-                                                color={message.username === user.username ? 'white' : 'text.secondary'}
-                                            >
-                                                {new Date(message.timestamp).toLocaleTimeString()}
-                                            </Typography>
+                                            <Box>
+                                                <Typography
+                                                    variant="caption"
+                                                    color={message.username === user.username ? 'white' : 'text.secondary'}
+                                                >
+                                                    {new Date(message.timestamp).toLocaleTimeString()}
+                                                </Typography>
+                                                {!message.system && (
+                                                    <MessageReactions
+                                                        reactions={message.reactions || []}
+                                                        onAddReaction={(emoji) => {
+                                                            // Handle reaction
+                                                        }}
+                                                        onRemoveReaction={(emoji) => {
+                                                            // Handle removing reaction
+                                                        }}
+                                                        currentUserId={user.username}
+                                                    />
+                                                )}
+                                            </Box>
                                         }
                                     />
                                 </Paper>
-                            </ListItem>
+                            </MessageThread>
                         ))}
                         <div ref={messagesEndRef} />
                     </List>
 
+                    {typingUsers.length > 0 && (
+                        <TypingIndicator users={typingUsers} />
+                    )}
+
                     <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
+                        {showVoiceMessage && (
+                            <Box sx={{ mb: 2 }}>
+                                <VoiceMessage
+                                    onSend={handleVoiceMessage}
+                                    onClose={() => setShowVoiceMessage(false)}
+                                />
+                            </Box>
+                        )}
+
+                        {showScheduler && (
+                            <Box sx={{ mb: 2 }}>
+                                <MessageScheduler
+                                    scheduledMessages={scheduledMessages}
+                                    onSchedule={handleScheduleMessage}
+                                    onClose={() => setShowScheduler(false)}
+                                    onEdit={(message) => {
+                                        // Handle edit
+                                    }}
+                                    onDelete={(id) => {
+                                        setScheduledMessages(prev => prev.filter(msg => msg.id !== id));
+                                    }}
+                                />
+                            </Box>
+                        )}
+
+                        {showGifPicker && (
+                            <Box sx={{ mb: 2 }}>
+                                <GifPicker
+                                    onSelect={handleGifSelect}
+                                    onClose={() => setShowGifPicker(false)}
+                                />
+                            </Box>
+                        )}
+
+                        <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+                            <IconButton
+                                color="primary"
+                                onClick={() => setShowGifPicker(!showGifPicker)}
+                                title="Send GIF"
+                            >
+                                <GifIcon />
+                            </IconButton>
+                            <IconButton
+                                color="primary"
+                                onClick={() => setShowVoiceMessage(true)}
+                                title="Record Voice Message"
+                            >
+                                <MicIcon />
+                            </IconButton>
+                            <IconButton
+                                color="primary"
+                                onClick={() => setShowScheduler(true)}
+                                title="Schedule Message"
+                            >
+                                <ScheduleIcon />
+                            </IconButton>
+                            <IconButton
+                                color="primary"
+                                onClick={() => setShowEmojiPicker(true)}
+                                title="Add Emoji"
+                            >
+                                <EmojiIcon />
+                            </IconButton>
+                        </Box>
+
                         <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
                             <TextField
                                 fullWidth
                                 value={messageInput}
-                                onChange={(e) => setMessageInput(e.target.value)}
+                                onChange={handleInputChange}
                                 placeholder="Type a message..."
                                 variant="outlined"
                                 size="small"

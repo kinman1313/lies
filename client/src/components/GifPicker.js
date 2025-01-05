@@ -3,155 +3,124 @@ import {
     Box,
     TextField,
     IconButton,
-    Paper,
-    Typography,
-    CircularProgress,
     ImageList,
     ImageListItem,
-    InputAdornment,
-    Tabs,
-    Tab
+    Paper,
+    Typography,
+    CircularProgress
 } from '@mui/material';
-import { Search as SearchIcon, Gif as GifIcon, TrendingUp as TrendingIcon } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { searchGifs, getTrendingGifs } from '../utils/giphy';
+import {
+    Search as SearchIcon,
+    Close as CloseIcon
+} from '@mui/icons-material';
+
+const GIPHY_API_KEY = 'DO7ARGJtRRks2yxeAvolAIBFJqM74EPV';
+const GIPHY_API_URL = 'https://api.giphy.com/v1/gifs';
 
 const GifPicker = ({ onSelect, onClose }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [gifs, setGifs] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [tab, setTab] = useState(0);
-    const [debounceTimeout, setDebounceTimeout] = useState(null);
+    const [error, setError] = useState(null);
+
+    const fetchGifs = async (endpoint, params) => {
+        try {
+            setLoading(true);
+            setError(null);
+            const queryParams = new URLSearchParams({
+                api_key: GIPHY_API_KEY,
+                limit: 20,
+                ...params
+            });
+            const response = await fetch(`${GIPHY_API_URL}/${endpoint}?${queryParams}`);
+            const data = await response.json();
+            setGifs(data.data);
+        } catch (err) {
+            setError('Failed to load GIFs');
+            console.error('Error fetching GIFs:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        loadTrendingGifs();
+        fetchGifs('trending');
     }, []);
 
-    const loadTrendingGifs = async () => {
-        setLoading(true);
-        const trendingGifs = await getTrendingGifs();
-        setGifs(trendingGifs);
-        setLoading(false);
-    };
-
-    const handleSearch = async (query) => {
-        if (debounceTimeout) {
-            clearTimeout(debounceTimeout);
+    const handleSearch = (e) => {
+        e.preventDefault();
+        if (searchQuery.trim()) {
+            fetchGifs('search', { q: searchQuery });
         }
-
-        setDebounceTimeout(
-            setTimeout(async () => {
-                if (query.trim()) {
-                    setLoading(true);
-                    const searchResults = await searchGifs(query);
-                    setGifs(searchResults);
-                    setLoading(false);
-                } else {
-                    loadTrendingGifs();
-                }
-            }, 500)
-        );
-    };
-
-    const handleGifSelect = (gif) => {
-        onSelect({
-            url: gif.images.fixed_height.url,
-            width: gif.images.fixed_height.width,
-            height: gif.images.fixed_height.height
-        });
-        onClose();
     };
 
     return (
         <Paper
+            elevation={3}
             sx={{
-                width: '100%',
-                maxWidth: 500,
-                maxHeight: '70vh',
+                p: 2,
+                maxHeight: 400,
                 display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                position: 'relative'
+                flexDirection: 'column'
             }}
         >
-            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography variant="h6" gutterBottom>
-                    Select a GIF
-                </Typography>
-                <TextField
-                    fullWidth
-                    placeholder="Search GIFs..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        handleSearch(e.target.value);
-                    }}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon />
-                            </InputAdornment>
-                        )
-                    }}
-                />
-                <Tabs
-                    value={tab}
-                    onChange={(e, newValue) => {
-                        setTab(newValue);
-                        if (newValue === 1) {
-                            loadTrendingGifs();
-                            setSearchQuery('');
-                        }
-                    }}
-                    sx={{ mt: 1 }}
-                >
-                    <Tab icon={<GifIcon />} label="Search" />
-                    <Tab icon={<TrendingIcon />} label="Trending" />
-                </Tabs>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <form onSubmit={handleSearch} style={{ flex: 1, display: 'flex', gap: 8 }}>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search GIFs..."
+                        variant="outlined"
+                    />
+                    <IconButton type="submit" color="primary">
+                        <SearchIcon />
+                    </IconButton>
+                </form>
+                <IconButton onClick={onClose}>
+                    <CloseIcon />
+                </IconButton>
             </Box>
 
-            <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-                {loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : (
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={searchQuery}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                        >
-                            <ImageList cols={2} gap={8}>
-                                {gifs.map((gif) => (
-                                    <ImageListItem
-                                        key={gif.id}
-                                        component={motion.div}
-                                        layoutId={gif.id}
-                                        whileHover={{ scale: 1.05 }}
-                                        whileTap={{ scale: 0.95 }}
-                                        sx={{ cursor: 'pointer' }}
-                                        onClick={() => handleGifSelect(gif)}
-                                    >
-                                        <img
-                                            src={gif.images.fixed_height.url}
-                                            alt={gif.title}
-                                            loading="lazy"
-                                            style={{
-                                                borderRadius: 1,
-                                                width: '100%',
-                                                height: 'auto'
-                                            }}
-                                        />
-                                    </ImageListItem>
-                                ))}
-                            </ImageList>
-                        </motion.div>
-                    </AnimatePresence>
-                )}
-            </Box>
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    <CircularProgress />
+                </Box>
+            ) : error ? (
+                <Typography color="error" align="center">
+                    {error}
+                </Typography>
+            ) : (
+                <Box sx={{ overflow: 'auto' }}>
+                    <ImageList cols={3} gap={8}>
+                        {gifs.map((gif) => (
+                            <ImageListItem
+                                key={gif.id}
+                                sx={{
+                                    cursor: 'pointer',
+                                    '&:hover': {
+                                        opacity: 0.8
+                                    }
+                                }}
+                                onClick={() => onSelect(gif.images.fixed_height)}
+                            >
+                                <img
+                                    src={gif.images.fixed_height.url}
+                                    alt={gif.title}
+                                    loading="lazy"
+                                    style={{
+                                        borderRadius: 4,
+                                        maxHeight: 150,
+                                        width: '100%',
+                                        objectFit: 'cover'
+                                    }}
+                                />
+                            </ImageListItem>
+                        ))}
+                    </ImageList>
+                </Box>
+            )}
         </Paper>
     );
 };

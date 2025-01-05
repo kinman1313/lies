@@ -1,101 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     Box,
     TextField,
-    Button,
     IconButton,
-    Dialog,
-    useTheme,
-    useMediaQuery
+    Popover
 } from '@mui/material';
 import {
     Send as SendIcon,
     Gif as GifIcon
 } from '@mui/icons-material';
 import GifPicker from './GifPicker';
-import { playSound } from '../utils/sounds';
 
 const ChatInput = ({ onSendMessage }) => {
-    const [messageInput, setMessageInput] = useState('');
-    const [showGifPicker, setShowGifPicker] = useState(false);
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const [message, setMessage] = useState('');
+    const [gifAnchorEl, setGifAnchorEl] = useState(null);
+    const inputRef = useRef(null);
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (messageInput.trim()) {
-            onSendMessage({ type: 'text', text: messageInput });
-            setMessageInput('');
-            playSound('message');
+        if (message.trim()) {
+            onSendMessage({ type: 'text', content: message });
+            setMessage('');
         }
     };
 
     const handleGifSelect = (gif) => {
-        onSendMessage({ type: 'gif', gif });
-        playSound('message');
+        onSendMessage({
+            type: 'gif',
+            content: gif.url,
+            metadata: {
+                width: gif.width,
+                height: gif.height
+            }
+        });
+        setGifAnchorEl(null);
     };
 
     return (
-        <>
-            <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px' }}>
-                    <IconButton
-                        color="primary"
-                        onClick={() => setShowGifPicker(true)}
-                        sx={{
-                            '&:hover': {
-                                background: 'rgba(124, 77, 255, 0.1)'
-                            }
-                        }}
-                    >
-                        <GifIcon />
-                    </IconButton>
-                    <TextField
-                        fullWidth
-                        value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
-                        placeholder="Type a message..."
-                        variant="outlined"
-                        size="small"
-                        onKeyPress={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSubmit(e);
-                            }
-                        }}
-                        multiline
-                        maxRows={4}
-                    />
-                    <Button
-                        type="submit"
-                        variant="contained"
-                        color="primary"
-                        endIcon={<SendIcon />}
-                        disabled={!messageInput.trim()}
-                    >
-                        {!isMobile && 'Send'}
-                    </Button>
-                </form>
-            </Box>
+        <Box sx={{ p: 2, backgroundColor: 'background.paper' }}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8 }}>
+                <TextField
+                    fullWidth
+                    multiline
+                    maxRows={4}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    ref={inputRef}
+                    sx={{
+                        '& .MuiOutlinedInput-root': {
+                            borderRadius: 2
+                        }
+                    }}
+                />
+                <IconButton
+                    color="primary"
+                    onClick={(e) => setGifAnchorEl(e.currentTarget)}
+                >
+                    <GifIcon />
+                </IconButton>
+                <IconButton type="submit" color="primary" disabled={!message.trim()}>
+                    <SendIcon />
+                </IconButton>
+            </form>
 
-            <Dialog
-                open={showGifPicker}
-                onClose={() => setShowGifPicker(false)}
-                maxWidth="md"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        background: 'transparent',
-                        boxShadow: 'none'
-                    }
+            <Popover
+                open={Boolean(gifAnchorEl)}
+                anchorEl={gifAnchorEl}
+                onClose={() => setGifAnchorEl(null)}
+                anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'center',
+                }}
+                transformOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'center',
+                }}
+                sx={{
+                    mt: -2
                 }}
             >
                 <GifPicker
                     onSelect={handleGifSelect}
-                    onClose={() => setShowGifPicker(false)}
+                    onClose={() => setGifAnchorEl(null)}
                 />
-            </Dialog>
-        </>
+            </Popover>
+        </Box>
     );
 };
 

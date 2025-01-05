@@ -75,11 +75,29 @@ io.on('connection', (socket) => {
 
     socket.on('message', (message) => {
         const username = users.get(socket.id);
-        io.emit('message', {
+        const messageData = {
             text: message,
             username,
-            timestamp: new Date().toISOString()
-        });
+            timestamp: new Date().toISOString(),
+            reactions: []
+        };
+        io.emit('message', messageData);
+    });
+
+    socket.on('typing', ({ username }) => {
+        io.emit('typing', { username });
+    });
+
+    socket.on('stopTyping', ({ username }) => {
+        io.emit('stopTyping', { username });
+    });
+
+    socket.on('reaction', ({ messageId, emoji, username }) => {
+        io.emit('reaction', { messageId, emoji, username });
+    });
+
+    socket.on('removeReaction', ({ messageId, emoji, username }) => {
+        io.emit('removeReaction', { messageId, emoji, username });
     });
 
     socket.on('disconnect', () => {
