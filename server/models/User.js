@@ -75,8 +75,6 @@ const userSchema = new mongoose.Schema({
         required: true,
         minLength: 8
     },
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
     profile: profileSchema,
     friends: [{
         user: {
@@ -158,56 +156,15 @@ const userSchema = new mongoose.Schema({
 // Hash password before saving
 userSchema.pre('save', async function (next) {
     const user = this;
-    try {
-        if (user.isModified('password')) {
-            console.log('Hashing password for user:', {
-                userId: user._id,
-                email: user.email
-            });
-            const salt = await bcrypt.genSalt(10);
-            user.password = await bcrypt.hash(user.password, salt);
-            console.log('Password hashed successfully');
-        }
-        next();
-    } catch (error) {
-        console.error('Error hashing password:', {
-            message: error.message,
-            stack: error.stack
-        });
-        next(error);
+    if (user.isModified('password')) {
+        user.password = await bcrypt.hash(user.password, 8);
     }
+    next();
 });
 
 // Method to check password
 userSchema.methods.checkPassword = async function (password) {
-    try {
-        console.log('Checking password for user:', {
-            userId: this._id,
-            email: this.email,
-            hashedPasswordLength: this.password?.length
-        });
-
-        if (!this.password) {
-            console.log('No password hash found for user');
-            return false;
-        }
-
-        const isMatch = await bcrypt.compare(password, this.password);
-        console.log('Password check result:', {
-            userId: this._id,
-            email: this.email,
-            isMatch
-        });
-        return isMatch;
-    } catch (error) {
-        console.error('Password check error:', {
-            message: error.message,
-            stack: error.stack,
-            userId: this._id,
-            email: this.email
-        });
-        throw error;
-    }
+    return bcrypt.compare(password, this.password);
 };
 
 // Method to generate auth token

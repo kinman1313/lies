@@ -55,11 +55,7 @@ app.use(express.json());
 
 // Import routes
 const userRoutes = require('./routes/users');
-const authRoutes = require('./routes/auth');
-
-// Register routes
 app.use('/api/users', userRoutes);
-app.use('/api/auth', authRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

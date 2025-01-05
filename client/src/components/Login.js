@@ -9,9 +9,7 @@ import {
     Typography,
     Link,
     Box,
-    Alert,
-    CircularProgress,
-    Divider
+    Alert
 } from '@mui/material';
 import LoadingButton from '@mui/lab/LoadingButton';
 
@@ -28,18 +26,10 @@ export default function Login() {
         try {
             setError('');
             setLoading(true);
-            console.log('Submitting login form:', { email });
-            const result = await login(email, password);
-            if (result.success) {
-                console.log('Login successful, navigating to chat');
-                navigate('/chat');
-            } else {
-                console.error('Login failed:', result.message);
-                setError(result.message);
-            }
+            await login(email, password);
+            navigate('/chat');
         } catch (err) {
-            console.error('Login submission error:', err);
-            setError(err.response?.data?.message || 'Failed to login');
+            setError(err.response?.data?.error || 'Failed to login');
         } finally {
             setLoading(false);
         }
@@ -82,41 +72,25 @@ export default function Login() {
                             autoComplete="current-password"
                         />
 
-                        <Button
+                        <LoadingButton
                             type="submit"
                             variant="contained"
                             fullWidth
                             size="large"
-                            disabled={loading}
+                            loading={loading}
+                            sx={{ mt: 3, mb: 2 }}
                         >
-                            {loading ? <CircularProgress size={24} /> : 'Login'}
-                        </Button>
+                            Login
+                        </LoadingButton>
 
-                        <Box sx={{ mt: 2, textAlign: 'center' }}>
-                            <Button
-                                component={RouterLink}
-                                to="/forgot-password"
-                                variant="text"
-                                color="primary"
-                            >
-                                Forgot Password?
-                            </Button>
-                        </Box>
-
-                        <Divider sx={{ my: 2 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                OR
+                        <Box sx={{ textAlign: 'center' }}>
+                            <Typography variant="body2">
+                                Don't have an account?{' '}
+                                <Link component={RouterLink} to="/register">
+                                    Sign Up
+                                </Link>
                             </Typography>
-                        </Divider>
-
-                        <Button
-                            component={RouterLink}
-                            to="/register"
-                            variant="outlined"
-                            fullWidth
-                        >
-                            Create an Account
-                        </Button>
+                        </Box>
                     </form>
                 </Paper>
             </Box>

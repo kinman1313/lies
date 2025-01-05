@@ -4,42 +4,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import Chat from './components/Chat';
-import ForgotPassword from './components/ForgotPassword';
-import ResetPassword from './components/ResetPassword';
-import { ThemeProvider, CssBaseline, createTheme } from '@mui/material';
-
-// Create theme
-const theme = createTheme({
-    palette: {
-        mode: 'dark',
-        primary: {
-            main: '#7C4DFF',
-        },
-        secondary: {
-            main: '#69F0AE',
-        },
-        background: {
-            default: '#121212',
-            paper: '#1E1E1E',
-        },
-    },
-    components: {
-        MuiButton: {
-            styleOverrides: {
-                root: {
-                    borderRadius: 8,
-                },
-            },
-        },
-        MuiPaper: {
-            styleOverrides: {
-                root: {
-                    borderRadius: 12,
-                },
-            },
-        },
-    },
-});
 
 // Protected Route Component
 const PrivateRoute = ({ children }) => {
@@ -56,55 +20,28 @@ const PublicRoute = ({ children }) => {
 // Chat component (moved from previous App.js)
 function App() {
     return (
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
+        <Router>
             <AuthProvider>
-                <Router>
-                    <Routes>
-                        <Route
-                            path="/login"
-                            element={
-                                <PublicRoute>
-                                    <Login />
-                                </PublicRoute>
-                            }
-                        />
-                        <Route
-                            path="/register"
-                            element={
-                                <PublicRoute>
-                                    <Register />
-                                </PublicRoute>
-                            }
-                        />
-                        <Route
-                            path="/forgot-password"
-                            element={
-                                <PublicRoute>
-                                    <ForgotPassword />
-                                </PublicRoute>
-                            }
-                        />
-                        <Route
-                            path="/reset-password/:token"
-                            element={
-                                <PublicRoute>
-                                    <ResetPassword />
-                                </PublicRoute>
-                            }
-                        />
-                        <Route
-                            path="/*"
-                            element={
-                                <PrivateRoute>
-                                    <Chat />
-                                </PrivateRoute>
-                            }
-                        />
-                    </Routes>
-                </Router>
+                <Routes>
+                    <Route path="/login" element={
+                        <PublicRoute>
+                            <Login />
+                        </PublicRoute>
+                    } />
+                    <Route path="/register" element={
+                        <PublicRoute>
+                            <Register />
+                        </PublicRoute>
+                    } />
+                    <Route path="/chat" element={
+                        <PrivateRoute>
+                            <Chat />
+                        </PrivateRoute>
+                    } />
+                    <Route path="/" element={<Navigate to="/chat" />} />
+                </Routes>
             </AuthProvider>
-        </ThemeProvider>
+        </Router>
     );
 }
 
