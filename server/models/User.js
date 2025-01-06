@@ -183,6 +183,15 @@ userSchema.index({ username: 'text', 'profile.displayName': 'text' });
 userSchema.index({ email: 1 });
 userSchema.index({ isOnline: 1 });
 userSchema.index({ 'friends.user': 1, 'friends.status': 1 });
+userSchema.index({ resetPasswordToken: 1, resetPasswordExpires: 1 });
+
+// Password validation
+userSchema.path('password').validate(function (password) {
+    return password.length >= 8 &&
+        /[A-Z]/.test(password) &&
+        /[a-z]/.test(password) &&
+        /[0-9]/.test(password);
+}, 'Password must be at least 8 characters long and contain uppercase, lowercase, and numbers');
 
 // Find user by credentials
 userSchema.statics.findByCredentials = async (email, password) => {

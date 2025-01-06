@@ -26,11 +26,40 @@ export default function NewPassword() {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [validationErrors, setValidationErrors] = useState({});
     const navigate = useNavigate();
     const { token } = useParams();
 
+    const validatePassword = (pass) => {
+        const errors = {};
+        if (pass.length < 8) {
+            errors.length = 'Password must be at least 8 characters long';
+        }
+        if (!/[A-Z]/.test(pass)) {
+            errors.uppercase = 'Password must contain at least one uppercase letter';
+        }
+        if (!/[a-z]/.test(pass)) {
+            errors.lowercase = 'Password must contain at least one lowercase letter';
+        }
+        if (!/[0-9]/.test(pass)) {
+            errors.number = 'Password must contain at least one number';
+        }
+        return errors;
+    };
+
+    const handlePasswordChange = (e) => {
+        const newPassword = e.target.value;
+        setPassword(newPassword);
+        setValidationErrors(validatePassword(newPassword));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (Object.keys(validationErrors).length > 0) {
+            setError('Please fix the password validation errors');
+            return;
+        }
 
         if (password !== confirmPassword) {
             setError('Passwords do not match');
@@ -43,12 +72,12 @@ export default function NewPassword() {
             setLoading(true);
 
             await axios.post(`${config.API_URL}/api/users/reset-password/${token}`, { password });
-            setMessage('Password has been successfully reset.');
+            setMessage('Password has been successfully reset. Redirecting to login...');
             setTimeout(() => {
                 navigate('/login');
             }, 2000);
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to reset password');
+            setError(err.response?.data?.error || 'Failed to reset password. Please try again.');
             console.error('Reset password error:', err);
         } finally {
             setLoading(false);
@@ -86,7 +115,9 @@ export default function NewPassword() {
                             id="password"
                             autoComplete="new-password"
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            onChange={handlePasswordChange}
+                            error={Object.keys(validationErrors).length > 0}
+                            helperText={Object.values(validationErrors)[0]}
                             InputProps={{
                                 endAdornment: (
                                     <InputAdornment position="end">
@@ -112,7 +143,53 @@ export default function NewPassword() {
                             autoComplete="new-password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
+                            error={password !== confirmPassword && confirmPassword !== ''}
+                            helperText={
+                                password !== confirmPassword && confirmPassword !== ''
+                                    ? 'Passwords do not match'
+                                    : ''
+                            }
                         />
+
+                        <Box sx={{ mt: 2, mb: 2 }}>
+                            <Typography variant="caption" color="textSecondary">
+                                Password must contain:
+                            </Typography>
+                            <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                                <li>
+                                    <Typography
+                                        variant="caption"
+                                        color={password.length >= 8 ? 'success.main' : 'text.secondary'}
+                                    >
+                                        At least 8 characters
+                                    </Typography>
+                                </li>
+                                <li>
+                                    <Typography
+                                        variant="caption"
+                                        color={/[A-Z]/.test(password) ? 'success.main' : 'text.secondary'}
+                                    >
+                                        One uppercase letter
+                                    </Typography>
+                                </li>
+                                <li>
+                                    <Typography
+                                        variant="caption"
+                                        color={/[a-z]/.test(password) ? 'success.main' : 'text.secondary'}
+                                    >
+                                        One lowercase letter
+                                    </Typography>
+                                </li>
+                                <li>
+                                    <Typography
+                                        variant="caption"
+                                        color={/[0-9]/.test(password) ? 'success.main' : 'text.secondary'}
+                                    >
+                                        One number
+                                    </Typography>
+                                </li>
+                            </ul>
+                        </Box>
 
                         <LoadingButton
                             type="submit"
@@ -120,6 +197,12 @@ export default function NewPassword() {
                             variant="contained"
                             sx={{ mt: 3, mb: 2 }}
                             loading={loading}
+                            disabled={
+                                Object.keys(validationErrors).length > 0 ||
+                                password !== confirmPassword ||
+                                !password ||
+                                !confirmPassword
+                            }
                         >
                             Set New Password
                         </LoadingButton>
