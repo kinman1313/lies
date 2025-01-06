@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { SocketProvider } from './contexts/SocketContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import Chat from './components/Chat';
@@ -24,31 +23,29 @@ function App() {
     return (
         <Router>
             <AuthProvider>
-                <SocketProvider>
-                    <Routes>
-                        <Route path="/login" element={
-                            <PublicRoute>
-                                <Login />
-                            </PublicRoute>
-                        } />
-                        <Route path="/register" element={
-                            <PublicRoute>
-                                <Register />
-                            </PublicRoute>
-                        } />
-                        <Route path="/reset-password" element={
-                            <PublicRoute>
-                                <ResetPassword />
-                            </PublicRoute>
-                        } />
-                        <Route path="/chat" element={
-                            <PrivateRoute>
-                                <Chat />
-                            </PrivateRoute>
-                        } />
-                        <Route path="/" element={<Navigate to="/chat" />} />
-                    </Routes>
-                </SocketProvider>
+                <Routes>
+                    <Route path="/login" element={
+                        <PublicRoute>
+                            <Login />
+                        </PublicRoute>
+                    } />
+                    <Route path="/register" element={
+                        <PublicRoute>
+                            <Register />
+                        </PublicRoute>
+                    } />
+                    <Route path="/reset-password" element={
+                        <PublicRoute>
+                            <ResetPassword />
+                        </PublicRoute>
+                    } />
+                    <Route path="/chat" element={
+                        <PrivateRoute>
+                            <Chat />
+                        </PrivateRoute>
+                    } />
+                    <Route path="/" element={<Navigate to="/chat" />} />
+                </Routes>
             </AuthProvider>
         </Router>
     );
