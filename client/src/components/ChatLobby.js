@@ -7,6 +7,7 @@ import {
     ListItem,
     ListItemAvatar,
     ListItemText,
+    ListItemIcon,
     Avatar,
     IconButton,
     Button,
