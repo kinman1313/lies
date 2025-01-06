@@ -96,99 +96,10 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
         }
     };
 
-    const handleFileSelect = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            if (file.size > 10 * 1024 * 1024) { // 10MB limit
-                alert('File size must be less than 10MB');
-                return;
-            }
-            setSelectedFile(file);
-        }
-    };
-
-    const handleGifSelect = (gif) => {
-        console.log('Selected GIF:', gif); // Debug log
-        onSendMessage({
-            type: 'gif',
-            content: gif.url,
-            metadata: {
-                width: gif.width,
-                height: gif.height,
-                title: gif.title
-            }
-        });
+    const handleGifSelect = (gifData) => {
+        console.log('Selected GIF data:', gifData); // Debug log
+        onSendMessage(gifData);
         setGifDialogOpen(false);
-    };
-
-    const handleStartRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-
-            mediaRecorder.ondataavailable = (e) => {
-                audioChunksRef.current.push(e.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-                const formData = new FormData();
-                formData.append('file', audioBlob, 'voice-message.wav');
-
-                try {
-                    setIsUploading(true);
-                    const response = await fetch('/api/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (!response.ok) throw new Error('Upload failed');
-
-                    const { fileUrl } = await response.json();
-
-                    onSendMessage({
-                        type: 'voice',
-                        content: fileUrl,
-                        metadata: {
-                            duration: recordingTime
-                        }
-                    });
-                } catch (error) {
-                    console.error('Error uploading voice message:', error);
-                } finally {
-                    setIsUploading(false);
-                }
-
-                stream.getTracks().forEach(track => track.stop());
-            };
-
-            mediaRecorder.start();
-            setIsRecording(true);
-            setRecordingTime(0);
-
-            recordingTimerRef.current = setInterval(() => {
-                setRecordingTime(prev => prev + 1);
-            }, 1000);
-        } catch (error) {
-            console.error('Error starting recording:', error);
-        }
-    };
-
-    const handleStopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-            clearInterval(recordingTimerRef.current);
-            setRecordingTime(0);
-        }
-    };
-
-    const formatRecordingTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     return (
@@ -231,24 +142,6 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
                     <GifIcon />
                 </IconButton>
 
-                {/* Voice message button */}
-                <IconButton
-                    onClick={isRecording ? handleStopRecording : handleStartRecording}
-                    color={isRecording ? 'error' : 'default'}
-                    size="medium"
-                    sx={{ color: 'text.secondary' }}
-                >
-                    <MicIcon />
-                </IconButton>
-
-                {/* Timer button */}
-                <IconButton
-                    size="medium"
-                    sx={{ color: 'text.secondary' }}
-                >
-                    <AccessTimeIcon />
-                </IconButton>
-
                 {/* Message input */}
                 <TextField
                     fullWidth
@@ -257,28 +150,21 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
                     value={message}
                     onChange={handleMessageChange}
                     onKeyPress={handleKeyPress}
-                    placeholder={isRecording ? 'Recording...' : 'Type a message...'}
-                    disabled={isRecording}
+                    placeholder="Type a message..."
                     variant="standard"
                     InputProps={{
                         disableUnderline: true,
-                        sx: {
-                            p: 1,
-                            '&.Mui-focused': {
-                                backgroundColor: 'transparent'
-                            }
-                        }
                     }}
+                    sx={{ mx: 1 }}
                 />
 
                 {/* Send button */}
                 <IconButton
                     onClick={handleSendMessage}
+                    disabled={!message.trim() && !selectedFile}
                     color="primary"
-                    disabled={isUploading || (!message.trim() && !selectedFile)}
-                    size="medium"
                 >
-                    {isUploading ? <CircularProgress size={24} /> : <SendIcon />}
+                    <SendIcon />
                 </IconButton>
             </Box>
 
@@ -288,20 +174,11 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
                 onClose={() => setGifDialogOpen(false)}
                 maxWidth="md"
                 fullWidth
-                PaperProps={{
-                    sx: {
-                        height: '80vh',
-                        maxHeight: '600px'
-                    }
-                }}
             >
-                <DialogTitle>Select a GIF</DialogTitle>
-                <DialogContent dividers>
-                    <GifPicker onSelect={handleGifSelect} onClose={() => setGifDialogOpen(false)} />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setGifDialogOpen(false)}>Cancel</Button>
-                </DialogActions>
+                <GifPicker
+                    onSelect={handleGifSelect}
+                    onClose={() => setGifDialogOpen(false)}
+                />
             </Dialog>
         </Box>
     );

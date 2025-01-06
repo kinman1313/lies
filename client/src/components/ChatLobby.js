@@ -48,6 +48,7 @@ const ChatLobby = ({ onCreateRoom }) => {
             socket.emit('joinLobby');
 
             socket.on('lobbyMessage', (message) => {
+                console.log('Received lobby message:', message); // Debug log
                 setMessages(prev => [...prev, message]);
             });
 
@@ -65,33 +66,29 @@ const ChatLobby = ({ onCreateRoom }) => {
 
     const handleSendMessage = (messageData) => {
         if (socket) {
+            // Create a temporary message
+            const tempMessage = {
+                _id: `temp-${Date.now()}`,
+                type: messageData.type,
+                content: messageData.content,
+                metadata: messageData.metadata,
+                userId: user._id,
+                username: user.username,
+                createdAt: new Date().toISOString(),
+                pending: true
+            };
+
+            // Add message to local state immediately
+            setMessages(prev => [...prev, tempMessage]);
+
+            // Emit to server
+            console.log('Sending lobby message:', messageData); // Debug log
             socket.emit('lobbyMessage', messageData);
         }
     };
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Lobby Header */}
-            <Box sx={{
-                p: 2,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: 1,
-                borderColor: 'divider',
-                backgroundColor: 'background.paper',
-                zIndex: 2
-            }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="h6">
-                        General Lobby
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        {usersOnline.length} users online
-                    </Typography>
-                </Box>
-            </Box>
-
             {/* Messages Area */}
             <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 1 }}>
                 <MessageList messages={messages} />

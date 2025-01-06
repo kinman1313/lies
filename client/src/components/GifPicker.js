@@ -6,13 +6,18 @@ import {
     ImageListItem,
     Typography,
     CircularProgress,
-    InputAdornment
+    InputAdornment,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button
 } from '@mui/material';
 import {
     Search as SearchIcon
 } from '@mui/icons-material';
 
-const GIPHY_API_KEY = process.env.REACT_APP_GIPHY_API_KEY;
+const GIPHY_API_KEY = 'DO7ARGJtRRks2yxeAvolAIBFJqM74EPV';
 const GIPHY_API_URL = 'https://api.giphy.com/v1/gifs';
 
 const GifPicker = ({ onSelect, onClose }) => {
@@ -25,7 +30,7 @@ const GifPicker = ({ onSelect, onClose }) => {
         try {
             setLoading(true);
             setError(null);
-            console.log('Using Giphy API key:', GIPHY_API_KEY);
+            console.log('Fetching GIFs...');
 
             const queryParams = new URLSearchParams({
                 api_key: GIPHY_API_KEY,
@@ -35,7 +40,7 @@ const GifPicker = ({ onSelect, onClose }) => {
             });
 
             const url = `${GIPHY_API_URL}/${endpoint}?${queryParams}`;
-            console.log('Fetching GIFs from:', url);
+            console.log('Fetching from URL:', url);
 
             const response = await fetch(url);
             if (!response.ok) {
@@ -52,8 +57,8 @@ const GifPicker = ({ onSelect, onClose }) => {
             setGifs(data.data.map(gif => ({
                 id: gif.id,
                 url: gif.images.fixed_height.url,
-                width: gif.images.fixed_height.width,
-                height: gif.images.fixed_height.height,
+                width: parseInt(gif.images.fixed_height.width),
+                height: parseInt(gif.images.fixed_height.height),
                 title: gif.title
             })));
         } catch (err) {
@@ -79,7 +84,16 @@ const GifPicker = ({ onSelect, onClose }) => {
 
     const handleGifSelect = (gif) => {
         console.log('Selected GIF:', gif);
-        onSelect(gif);
+        onSelect({
+            type: 'gif',
+            content: gif.url,
+            metadata: {
+                width: gif.width,
+                height: gif.height,
+                title: gif.title
+            }
+        });
+        onClose();
     };
 
     return (
@@ -88,95 +102,90 @@ const GifPicker = ({ onSelect, onClose }) => {
             flexDirection: 'column',
             height: '100%',
             maxHeight: '60vh',
-            overflow: 'hidden'
+            width: '100%',
+            maxWidth: '500px',
+            margin: '0 auto'
         }}>
-            <Box sx={{
-                p: 2,
-                borderBottom: 1,
-                borderColor: 'divider'
-            }}>
-                <form onSubmit={handleSearch} style={{ width: '100%' }}>
-                    <TextField
-                        fullWidth
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search GIFs..."
-                        variant="outlined"
-                        size="small"
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon />
-                                </InputAdornment>
-                            )
-                        }}
-                    />
-                </form>
-            </Box>
+            <DialogTitle>Select a GIF</DialogTitle>
+            <DialogContent dividers>
+                <Box sx={{ mb: 2 }}>
+                    <form onSubmit={handleSearch}>
+                        <TextField
+                            fullWidth
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search GIFs..."
+                            variant="outlined"
+                            size="small"
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon />
+                                    </InputAdornment>
+                                )
+                            }}
+                        />
+                    </form>
+                </Box>
 
-            <Box sx={{
-                flex: 1,
-                overflow: 'auto',
-                p: 2
-            }}>
-                {error ? (
-                    <Box sx={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        height: '100%'
-                    }}>
-                        <Typography color="error">{error}</Typography>
-                    </Box>
-                ) : loading ? (
-                    <Box sx={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        height: '100%'
-                    }}>
-                        <CircularProgress />
-                    </Box>
-                ) : (
-                    <ImageList
-                        cols={2}
-                        gap={8}
-                        sx={{
-                            m: 0,
-                            width: '100%',
+                <Box sx={{
+                    height: '400px',
+                    overflow: 'auto'
+                }}>
+                    {error ? (
+                        <Box sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
                             height: '100%'
-                        }}
-                    >
-                        {gifs.map((gif) => (
-                            <ImageListItem
-                                key={gif.id}
-                                onClick={() => handleGifSelect(gif)}
-                                sx={{
-                                    cursor: 'pointer',
-                                    overflow: 'hidden',
-                                    borderRadius: 1,
-                                    '&:hover': {
-                                        opacity: 0.8,
-                                        transform: 'scale(0.98)',
-                                        transition: 'all 0.2s ease-in-out'
-                                    }
-                                }}
-                            >
-                                <img
-                                    src={gif.url}
-                                    alt={gif.title}
-                                    loading="lazy"
-                                    style={{
-                                        width: '100%',
-                                        height: 'auto',
-                                        objectFit: 'cover'
+                        }}>
+                            <Typography color="error">{error}</Typography>
+                        </Box>
+                    ) : loading ? (
+                        <Box sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: '100%'
+                        }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <ImageList cols={2} gap={8}>
+                            {gifs.map((gif) => (
+                                <ImageListItem
+                                    key={gif.id}
+                                    onClick={() => handleGifSelect(gif)}
+                                    sx={{
+                                        cursor: 'pointer',
+                                        overflow: 'hidden',
+                                        borderRadius: 1,
+                                        '&:hover': {
+                                            opacity: 0.8,
+                                            transform: 'scale(0.98)',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }
                                     }}
-                                />
-                            </ImageListItem>
-                        ))}
-                    </ImageList>
-                )}
-            </Box>
+                                >
+                                    <img
+                                        src={gif.url}
+                                        alt={gif.title}
+                                        loading="lazy"
+                                        style={{
+                                            width: '100%',
+                                            height: 'auto',
+                                            objectFit: 'cover'
+                                        }}
+                                    />
+                                </ImageListItem>
+                            ))}
+                        </ImageList>
+                    )}
+                </Box>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Cancel</Button>
+            </DialogActions>
         </Box>
     );
 };
