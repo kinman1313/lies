@@ -70,6 +70,7 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
 
                     setSelectedFile(null);
                 } else {
+                    console.log('Sending text message:', message.trim()); // Debug log
                     onSendMessage({
                         type: 'text',
                         content: message.trim()
@@ -89,6 +90,7 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
+            console.log('Enter key pressed, sending message'); // Debug log
             handleSendMessage();
         }
     };

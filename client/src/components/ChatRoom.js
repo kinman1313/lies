@@ -62,6 +62,8 @@ const ChatRoom = ({
 
     useEffect(() => {
         if (socket && roomId) {
+            console.log('Setting up socket listeners for room:', roomId); // Debug log
+
             // Join room
             socket.emit('joinRoom', { roomId });
 
@@ -79,11 +81,16 @@ const ChatRoom = ({
             });
 
             // Listen for new messages
-            socket.on('message', (message) => {
-                setMessages(prev => [...prev, message]);
-                if (notificationsEnabled && message.userId !== user._id) {
-                    notificationSound.current.play().catch(console.error);
-                    setUnreadCount(prev => prev + 1);
+            socket.on('message', (data) => {
+                console.log('Received message event:', data); // Debug log
+                if (data.type === 'new') {
+                    setMessages(prev => [...prev, data.message]);
+                } else if (data.type === 'reaction') {
+                    setMessages(prev => prev.map(msg =>
+                        msg._id === data.messageId
+                            ? { ...msg, reactions: data.reactions }
+                            : msg
+                    ));
                 }
             });
 
@@ -186,7 +193,14 @@ const ChatRoom = ({
                 setMembers(updatedMembers);
             });
 
+            // Handle errors
+            socket.on('error', (error) => {
+                console.error('Socket error:', error);
+                setError(error.message);
+            });
+
             return () => {
+                console.log('Cleaning up socket listeners'); // Debug log
                 socket.emit('leaveRoom', { roomId });
                 socket.off('message');
                 socket.off('voiceMessage');
@@ -199,25 +213,17 @@ const ChatRoom = ({
                 socket.off('typing');
                 socket.off('messageRead');
                 socket.off('memberUpdate');
+                socket.off('error');
             };
         }
     }, [socket, roomId, user._id, notificationsEnabled]);
 
     const handleSendMessage = (messageData) => {
         if (socket) {
-            // Ensure message data has the required fields
-            const message = {
-                roomId,
-                type: messageData.type || 'text',
-                content: messageData.content,
-                metadata: messageData.metadata || {}
-            };
-
-            // Send message through socket
-            socket.emit('sendMessage', message, (response) => {
-                if (!response.success) {
-                    setError('Failed to send message');
-                }
+            console.log('Sending message:', messageData); // Debug log
+            socket.emit('message', {
+                ...messageData,
+                roomId
             });
         }
     };

@@ -25,21 +25,36 @@ const GifPicker = ({ onSelect, onClose }) => {
         try {
             setLoading(true);
             setError(null);
+            console.log('Fetching GIFs with API key:', GIPHY_API_KEY);
+
             const queryParams = new URLSearchParams({
                 api_key: GIPHY_API_KEY,
                 limit: 20,
                 rating: 'g',
                 ...params
             });
-            const response = await fetch(`${GIPHY_API_URL}/${endpoint}?${queryParams}`);
+
+            const url = `${GIPHY_API_URL}/${endpoint}?${queryParams}`;
+            console.log('Fetching from URL:', url);
+
+            const response = await fetch(url);
             if (!response.ok) {
-                throw new Error('Failed to fetch GIFs');
+                const errorData = await response.json();
+                console.error('Giphy API error:', errorData);
+                throw new Error(`Failed to fetch GIFs: ${errorData.message || response.statusText}`);
             }
+
             const data = await response.json();
+            console.log('Received GIF data:', data);
+
+            if (!data.data || !Array.isArray(data.data)) {
+                throw new Error('Invalid response format from Giphy API');
+            }
+
             setGifs(data.data);
         } catch (err) {
-            setError('Failed to load GIFs');
-            console.error('Error fetching GIFs:', err);
+            console.error('Error in fetchGifs:', err);
+            setError(err.message || 'Failed to load GIFs');
         } finally {
             setLoading(false);
         }
@@ -57,6 +72,11 @@ const GifPicker = ({ onSelect, onClose }) => {
     };
 
     const handleGifSelect = (gif) => {
+        if (!gif.images?.fixed_height?.url) {
+            console.error('Invalid GIF data:', gif);
+            return;
+        }
+
         onSelect({
             url: gif.images.fixed_height.url,
             width: gif.images.fixed_height.width,
