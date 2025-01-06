@@ -25,11 +25,11 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
-const RoomList = ({ rooms, onRoomSelect, socket }) => {
-    const { user } = useAuth();
+const RoomList = ({ onRoomSelect }) => {
+    const [rooms, setRooms] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
     const [newRoomName, setNewRoomName] = useState('');
-    const [error, setError] = useState('');
 
     const handleCreateRoom = () => {
         if (socket && newRoomName.trim()) {

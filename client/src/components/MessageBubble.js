@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Paper, Typography, Box, IconButton, Slider } from '@mui/material';
 import { PlayArrow as PlayIcon, Pause as PauseIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -69,6 +69,16 @@ const MessageBubble = ({ message, isOwn }) => {
             audioRef.current.src = '';
         };
     }, [message.text]);
+
+    useEffect(() => {
+        if (isVoiceMessage && audioRef.current) {
+            const audio = audioRef.current;
+            return () => {
+                audio.pause();
+                audio.currentTime = 0;
+            };
+        }
+    }, [isVoiceMessage]);
 
     return (
         <motion.div

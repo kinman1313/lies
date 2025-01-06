@@ -16,11 +16,9 @@ import {
     TextField,
     Tooltip,
     Menu,
-    MenuItem,
-    Divider
+    MenuItem
 } from '@mui/material';
 import {
-    Settings as SettingsIcon,
     PersonAdd as InviteIcon,
     ExitToApp as LeaveIcon,
     MoreVert as MoreIcon,
@@ -43,7 +41,6 @@ const ChatRoom = ({
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
     const [settingsAnchorEl, setSettingsAnchorEl] = useState(null);
-    const [error, setError] = useState('');
 
     useEffect(() => {
         if (socket && roomId) {
@@ -56,8 +53,6 @@ const ChatRoom = ({
                     setRoom(response.room);
                     setMembers(response.members);
                     setMessages(response.messages);
-                } else {
-                    setError('Failed to load room data');
                 }
             });
 
@@ -98,8 +93,6 @@ const ChatRoom = ({
                 if (response.success) {
                     setInviteDialogOpen(false);
                     setInviteEmail('');
-                } else {
-                    setError(response.error || 'Failed to send invite');
                 }
             });
         }
@@ -110,8 +103,6 @@ const ChatRoom = ({
             socket.emit('leaveRoom', { roomId }, (response) => {
                 if (response.success) {
                     onLeaveRoom && onLeaveRoom();
-                } else {
-                    setError('Failed to leave room');
                 }
             });
         }
@@ -122,8 +113,6 @@ const ChatRoom = ({
             socket.emit('deleteRoom', { roomId }, (response) => {
                 if (response.success) {
                     onClose && onClose();
-                } else {
-                    setError('Failed to delete room');
                 }
             });
         }
