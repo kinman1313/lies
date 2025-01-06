@@ -1,164 +1,127 @@
 const mongoose = require('mongoose');
 
-const memberSchema = new mongoose.Schema({
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    role: {
-        type: String,
-        enum: ['owner', 'admin', 'member'],
-        default: 'member'
-    },
-    joinedAt: {
-        type: Date,
-        default: Date.now
-    },
-    notificationSettings: {
-        mentions: {
-            type: Boolean,
-            default: true
-        },
-        messages: {
-            type: Boolean,
-            default: true
-        },
-        reactions: {
-            type: Boolean,
-            default: true
-        }
-    }
-});
-
-const invitationSchema = new mongoose.Schema({
-    invitedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    invitedUser: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    status: {
-        type: String,
-        enum: ['pending', 'accepted', 'rejected'],
-        default: 'pending'
-    },
-    expiresAt: Date,
-    createdAt: {
-        type: Date,
-        default: Date.now
-    }
-});
-
-const pinnedMessageSchema = new mongoose.Schema({
-    message: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Message',
-        required: true
-    },
-    pinnedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    pinnedAt: {
-        type: Date,
-        default: Date.now
-    }
-});
-
 const roomSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
         trim: true
     },
+    ownerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    members: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    invites: [{
+        email: String,
+        token: String,
+        expiresAt: Date
+    }],
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    lastActivity: {
+        type: Date,
+        default: Date.now
+    },
+    isPrivate: {
+        type: Boolean,
+        default: false
+    },
     description: {
         type: String,
         trim: true
     },
-    type: {
-        type: String,
-        enum: ['public', 'private', 'direct'],
-        default: 'public'
-    },
     avatar: {
-        url: String,
-        color: String
+        type: String
     },
-    categories: [{
-        type: String,
-        trim: true
-    }],
-    tags: [{
-        type: String,
-        trim: true
-    }],
-    members: [memberSchema],
-    invitations: [invitationSchema],
-    pinnedMessages: [pinnedMessageSchema],
     settings: {
         allowInvites: {
             type: Boolean,
             default: true
         },
-        allowFileSharing: {
-            type: Boolean,
-            default: true
-        },
-        maxFileSize: {
+        memberLimit: {
             type: Number,
-            default: 10 * 1024 * 1024 // 10MB
+            default: 100
         },
-        allowedFileTypes: [{
-            type: String,
-            default: ['image/*', 'application/pdf']
-        }],
-        requireApproval: {
-            type: Boolean,
-            default: false
-        },
-        readOnly: {
-            type: Boolean,
-            default: false
-        },
-        slowMode: {
-            enabled: {
-                type: Boolean,
-                default: false
-            },
-            delay: {
-                type: Number,
-                default: 0
-            }
-        }
-    },
-    metadata: {
-        messageCount: {
+        messageRetention: {
             type: Number,
-            default: 0
-        },
-        lastActivity: Date,
-        createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
+            default: 30 // days
         }
     }
-}, {
-    timestamps: true
 });
 
-// Indexes for faster queries
-roomSchema.index({ name: 'text', description: 'text' });
-roomSchema.index({ categories: 1 });
-roomSchema.index({ tags: 1 });
-roomSchema.index({ 'members.user': 1 });
-roomSchema.index({ type: 1 });
-roomSchema.index({ 'invitations.invitedUser': 1 });
+// Indexes for better query performance
+roomSchema.index({ name: 'text' });
+roomSchema.index({ members: 1 });
+roomSchema.index({ 'invites.email': 1 });
+roomSchema.index({ lastActivity: -1 });
+
+// Methods
+roomSchema.methods.addMember = async function (userId) {
+    if (!this.members.includes(userId)) {
+        this.members.push(userId);
+        this.lastActivity = new Date();
+        await this.save();
+    }
+};
+
+roomSchema.methods.removeMember = async function (userId) {
+    this.members = this.members.filter(id => !id.equals(userId));
+    this.lastActivity = new Date();
+    await this.save();
+};
+
+roomSchema.methods.createInvite = async function (email) {
+    const token = require('crypto').randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+
+    this.invites.push({
+        email,
+        token,
+        expiresAt
+    });
+
+    await this.save();
+    return token;
+};
+
+roomSchema.methods.validateInvite = async function (token) {
+    const invite = this.invites.find(inv => inv.token === token);
+    if (!invite) return false;
+
+    if (invite.expiresAt < new Date()) {
+        this.invites = this.invites.filter(inv => inv.token !== token);
+        await this.save();
+        return false;
+    }
+
+    return true;
+};
+
+roomSchema.methods.removeInvite = async function (token) {
+    this.invites = this.invites.filter(inv => inv.token !== token);
+    await this.save();
+};
+
+// Statics
+roomSchema.statics.findByMember = function (userId) {
+    return this.find({ members: userId })
+        .sort({ lastActivity: -1 });
+};
+
+roomSchema.statics.findByInviteEmail = function (email) {
+    return this.find({
+        'invites.email': email,
+        'invites.expiresAt': { $gt: new Date() }
+    });
+};
 
 const Room = mongoose.model('Room', roomSchema);
+
 module.exports = Room; 
