@@ -126,10 +126,10 @@ const MessageThread = ({
                         >
                             <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
                                 <Avatar
-                                    src={currentUser.profile?.avatar?.url}
+                                    src={currentUser?.profile?.avatar?.url}
                                     sx={{ width: 32, height: 32 }}
                                 >
-                                    {currentUser.username[0].toUpperCase()}
+                                    {currentUser?.username ? currentUser.username[0].toUpperCase() : '?'}
                                 </Avatar>
                                 <Box sx={{ flexGrow: 1 }}>
                                     <TextField
@@ -177,24 +177,24 @@ const MessageThread = ({
                                         >
                                             <ListItemAvatar>
                                                 <Avatar
-                                                    src={reply.user.avatar?.url}
+                                                    src={reply?.user?.avatar?.url}
                                                     sx={{ width: 32, height: 32 }}
                                                 >
-                                                    {reply.user.username[0].toUpperCase()}
+                                                    {reply?.user?.username ? reply.user.username[0].toUpperCase() : '?'}
                                                 </Avatar>
                                             </ListItemAvatar>
                                             <ListItemText
                                                 primary={
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                         <Typography variant="subtitle2">
-                                                            {reply.user.username}
+                                                            {reply?.user?.username || 'Unknown User'}
                                                         </Typography>
                                                         <Typography variant="caption" color="text.secondary">
-                                                            {formatTimestamp(reply.timestamp)}
+                                                            {reply?.timestamp ? formatTimestamp(reply.timestamp) : 'Unknown time'}
                                                         </Typography>
                                                     </Box>
                                                 }
-                                                secondary={reply.text}
+                                                secondary={reply?.text || ''}
                                             />
                                         </ListItem>
                                         {index < replies.length - 1 && (
