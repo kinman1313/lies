@@ -1,9 +1,9 @@
-import { SignalProtocol } from '@privacyresearch/libsignal-protocol-typescript';
+import * as SignalProtocol from '@privacyresearch/libsignal-protocol-typescript';
 import { Buffer } from 'buffer';
 
 class EncryptionService {
     constructor() {
-        this.signalProtocol = new SignalProtocol();
+        this.signalProtocol = SignalProtocol;
         this.sessions = new Map();
         this.initialized = false;
     }
