@@ -221,6 +221,23 @@ const ChatRoom = ({
     const handleSendMessage = (messageData) => {
         if (socket) {
             console.log('Sending message:', messageData); // Debug log
+
+            // Create a temporary message with a local ID
+            const tempMessage = {
+                _id: `temp-${Date.now()}`,
+                type: messageData.type,
+                content: messageData.content,
+                metadata: messageData.metadata,
+                userId: user._id,
+                username: user.username,
+                createdAt: new Date().toISOString(),
+                pending: true
+            };
+
+            // Add message to local state immediately
+            setMessages(prev => [...prev, tempMessage]);
+
+            // Emit to server
             socket.emit('message', {
                 ...messageData,
                 roomId

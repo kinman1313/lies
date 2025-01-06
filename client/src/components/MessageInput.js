@@ -107,6 +107,7 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
     };
 
     const handleGifSelect = (gif) => {
+        console.log('Selected GIF:', gif); // Debug log
         onSendMessage({
             type: 'gif',
             content: gif.url,

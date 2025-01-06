@@ -25,7 +25,7 @@ const GifPicker = ({ onSelect, onClose }) => {
         try {
             setLoading(true);
             setError(null);
-            console.log('Fetching GIFs with API key:', GIPHY_API_KEY);
+            console.log('Using Giphy API key:', GIPHY_API_KEY);
 
             const queryParams = new URLSearchParams({
                 api_key: GIPHY_API_KEY,
@@ -35,13 +35,11 @@ const GifPicker = ({ onSelect, onClose }) => {
             });
 
             const url = `${GIPHY_API_URL}/${endpoint}?${queryParams}`;
-            console.log('Fetching from URL:', url);
+            console.log('Fetching GIFs from:', url);
 
             const response = await fetch(url);
             if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Giphy API error:', errorData);
-                throw new Error(`Failed to fetch GIFs: ${errorData.message || response.statusText}`);
+                throw new Error(`Failed to fetch GIFs: ${response.statusText}`);
             }
 
             const data = await response.json();
@@ -51,38 +49,37 @@ const GifPicker = ({ onSelect, onClose }) => {
                 throw new Error('Invalid response format from Giphy API');
             }
 
-            setGifs(data.data);
+            setGifs(data.data.map(gif => ({
+                id: gif.id,
+                url: gif.images.fixed_height.url,
+                width: gif.images.fixed_height.width,
+                height: gif.images.fixed_height.height,
+                title: gif.title
+            })));
         } catch (err) {
-            console.error('Error in fetchGifs:', err);
-            setError(err.message || 'Failed to load GIFs');
+            console.error('Error fetching GIFs:', err);
+            setError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
+        console.log('GifPicker mounted, fetching trending GIFs...');
         fetchGifs('trending');
     }, []);
 
     const handleSearch = (e) => {
         e.preventDefault();
         if (searchQuery.trim()) {
+            console.log('Searching for GIFs:', searchQuery);
             fetchGifs('search', { q: searchQuery.trim() });
         }
     };
 
     const handleGifSelect = (gif) => {
-        if (!gif.images?.fixed_height?.url) {
-            console.error('Invalid GIF data:', gif);
-            return;
-        }
-
-        onSelect({
-            url: gif.images.fixed_height.url,
-            width: gif.images.fixed_height.width,
-            height: gif.images.fixed_height.height,
-            title: gif.title
-        });
+        console.log('Selected GIF:', gif);
+        onSelect(gif);
     };
 
     return (
@@ -166,12 +163,12 @@ const GifPicker = ({ onSelect, onClose }) => {
                                 }}
                             >
                                 <img
-                                    src={gif.images.fixed_height.url}
+                                    src={gif.url}
                                     alt={gif.title}
                                     loading="lazy"
                                     style={{
                                         width: '100%',
-                                        height: '100%',
+                                        height: 'auto',
                                         objectFit: 'cover'
                                     }}
                                 />
