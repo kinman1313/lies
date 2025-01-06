@@ -95,11 +95,18 @@ export default function Chat() {
             scrollToBottom();
         });
 
-        newSocket.on('userJoined', (username) => {
-            setUsers(prev => [...prev, username]);
+        newSocket.on('userJoined', (userData) => {
+            const username = typeof userData === 'string' ? userData : userData.username;
+            setUsers(prev => {
+                if (!prev.includes(username)) {
+                    return [...prev, username];
+                }
+                return prev;
+            });
         });
 
-        newSocket.on('userLeft', (username) => {
+        newSocket.on('userLeft', (userData) => {
+            const username = typeof userData === 'string' ? userData : userData.username;
             setUsers(prev => prev.filter(u => u !== username));
         });
 
