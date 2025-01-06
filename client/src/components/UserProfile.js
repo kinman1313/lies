@@ -1,22 +1,45 @@
 import React, { useState } from 'react';
 import {
+    Box,
+    Paper,
+    Avatar,
+    Typography,
+    Button,
+    IconButton,
+    TextField,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    Button,
-    TextField,
-    Avatar,
-    Box,
-    IconButton,
-    Typography,
-    Alert
+    Chip,
+    Divider,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText,
+    ListItemButton,
+    Tab,
+    Tabs,
+    Badge,
+    Switch,
+    FormControlLabel,
+    Tooltip
 } from '@mui/material';
 import {
     Edit as EditIcon,
-    Save as SaveIcon,
-    Cancel as CancelIcon
+    GitHub as GitHubIcon,
+    Twitter as TwitterIcon,
+    LinkedIn as LinkedInIcon,
+    Language as WebsiteIcon,
+    AccessTime as TimeIcon,
+    Translate as TranslateIcon,
+    Palette as PaletteIcon,
+    Notifications as NotificationsIcon,
+    Lock as LockIcon,
+    EmojiEmotions as EmojiIcon
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 const UserProfile = ({
     user,

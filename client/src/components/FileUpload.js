@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     Box,
     IconButton,
@@ -13,9 +13,7 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
-    Button,
-    Tooltip,
-    Alert
+    Button
 } from '@mui/material';
 import {
     AttachFile as AttachFileIcon,
@@ -24,23 +22,9 @@ import {
     Movie as VideoIcon,
     AudioFile as AudioIcon,
     Close as CloseIcon,
-    CloudUpload as CloudUploadIcon,
-    Delete as DeleteIcon
+    CloudUpload as CloudUploadIcon
 } from '@mui/icons-material';
-import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = {
-    'image/*': 'Images',
-    'application/pdf': 'PDF Documents',
-    'application/msword': 'Word Documents',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word Documents',
-    'text/plain': 'Text Files',
-    'application/zip': 'ZIP Archives',
-    'video/mp4': 'MP4 Videos',
-    'audio/mpeg': 'MP3 Audio'
-};
 
 const getFileIcon = (type) => {
     if (type.startsWith('image/')) return <ImageIcon />;
@@ -57,38 +41,43 @@ const formatFileSize = (bytes) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const FileUpload = ({ onUpload, roomId }) => {
+const FileUpload = ({ onUpload, maxSize = 10 * 1024 * 1024, allowedTypes = ['image/*', 'application/pdf'] }) => {
     const [files, setFiles] = useState([]);
     const [uploading, setUploading] = useState(false);
-    const [progress, setProgress] = useState({});
+    const [progress, setProgress] = useState(0);
     const [error, setError] = useState(null);
     const [previewOpen, setPreviewOpen] = useState(false);
-    const [previewFile, setPreviewFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState('');
     const fileInputRef = useRef();
 
-    const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
-        // Handle rejected files
-        if (rejectedFiles.length > 0) {
-            const errors = rejectedFiles.map(file => {
-                if (file.size > MAX_FILE_SIZE) {
-                    return `${file.name} is too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}`;
+    const handleFileSelect = (event) => {
+        const selectedFiles = Array.from(event.target.files);
+        const validFiles = selectedFiles.filter(file => {
+            // Check file size
+            if (file.size > maxSize) {
+                setError(`File ${file.name} is too large. Maximum size is ${formatFileSize(maxSize)}`);
+                return false;
+            }
+
+            // Check file type
+            const isValidType = allowedTypes.some(type => {
+                if (type.endsWith('/*')) {
+                    return file.type.startsWith(type.slice(0, -2));
                 }
-                return `${file.name} is not an allowed file type`;
+                return file.type === type;
             });
-            setError(errors.join('\n'));
-            return;
-        }
 
-        setFiles(prevFiles => [...prevFiles, ...acceptedFiles]);
+            if (!isValidType) {
+                setError(`File ${file.name} is not an allowed type`);
+                return false;
+            }
+
+            return true;
+        });
+
+        setFiles(prevFiles => [...prevFiles, ...validFiles]);
         setError(null);
-    }, []);
-
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        onDrop,
-        accept: ALLOWED_TYPES,
-        maxSize: MAX_FILE_SIZE,
-        multiple: true
-    });
+    };
 
     const handleRemoveFile = (index) => {
         setFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
@@ -96,7 +85,8 @@ const FileUpload = ({ onUpload, roomId }) => {
 
     const handlePreview = (file) => {
         if (file.type.startsWith('image/')) {
-            setPreviewFile(file);
+            const url = URL.createObjectURL(file);
+            setPreviewUrl(url);
             setPreviewOpen(true);
         }
     };
@@ -105,47 +95,34 @@ const FileUpload = ({ onUpload, roomId }) => {
         if (files.length === 0) return;
 
         setUploading(true);
-        setProgress({});
+        setProgress(0);
 
         try {
-            const uploadPromises = files.map(async (file, index) => {
+            const uploadPromises = files.map(async (file) => {
                 const formData = new FormData();
                 formData.append('file', file);
-                formData.append('roomId', roomId);
 
-                const xhr = new XMLHttpRequest();
-
-                // Track progress for individual files
-                xhr.upload.onprogress = (event) => {
-                    if (event.lengthComputable) {
-                        setProgress(prev => ({
-                            ...prev,
-                            [index]: Math.round((event.loaded * 100) / event.total)
-                        }));
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData,
+                    onUploadProgress: (progressEvent) => {
+                        const percentCompleted = Math.round(
+                            (progressEvent.loaded * 100) / progressEvent.total
+                        );
+                        setProgress(percentCompleted);
                     }
-                };
-
-                return new Promise((resolve, reject) => {
-                    xhr.open('POST', '/api/upload');
-                    xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
-
-                    xhr.onload = () => {
-                        if (xhr.status === 200) {
-                            resolve(JSON.parse(xhr.response));
-                        } else {
-                            reject(new Error(xhr.statusText));
-                        }
-                    };
-
-                    xhr.onerror = () => reject(new Error('Network Error'));
-                    xhr.send(formData);
                 });
+
+                if (!response.ok) throw new Error('Upload failed');
+
+                const data = await response.json();
+                return data;
             });
 
-            const results = await Promise.all(uploadPromises);
-            onUpload(results);
+            const uploadedFiles = await Promise.all(uploadPromises);
+            onUpload(uploadedFiles);
             setFiles([]);
-            setProgress({});
+            setProgress(100);
         } catch (err) {
             setError('Failed to upload files. Please try again.');
         } finally {
@@ -156,41 +133,33 @@ const FileUpload = ({ onUpload, roomId }) => {
     return (
         <>
             <Box>
-                {/* Drag & Drop Zone */}
-                <Paper
-                    {...getRootProps()}
-                    variant="outlined"
-                    sx={{
-                        p: 2,
-                        textAlign: 'center',
-                        backgroundColor: isDragActive ? 'action.hover' : 'background.paper',
-                        border: '2px dashed',
-                        borderColor: isDragActive ? 'primary.main' : 'divider',
-                        cursor: 'pointer'
-                    }}
-                >
-                    <input {...getInputProps()} />
-                    <CloudUploadIcon sx={{ fontSize: 48, color: 'action.active', mb: 1 }} />
-                    <Typography>
-                        {isDragActive
-                            ? 'Drop files here...'
-                            : 'Drag & drop files here, or click to select files'}
+                <input
+                    type="file"
+                    multiple
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                    accept={allowedTypes.join(',')}
+                />
+
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <IconButton
+                        onClick={() => fileInputRef.current.click()}
+                        disabled={uploading}
+                    >
+                        <AttachFileIcon />
+                    </IconButton>
+                    <Typography variant="caption" color="text.secondary">
+                        Max size: {formatFileSize(maxSize)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                        Maximum file size: {formatFileSize(MAX_FILE_SIZE)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                        Allowed types: {Object.values(ALLOWED_TYPES).join(', ')}
-                    </Typography>
-                </Paper>
+                </Box>
 
                 {error && (
-                    <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+                    <Typography color="error" variant="caption" sx={{ mt: 1 }}>
                         {error}
-                    </Alert>
+                    </Typography>
                 )}
 
-                {/* File List */}
                 <AnimatePresence>
                     {files.length > 0 && (
                         <motion.div
@@ -199,7 +168,7 @@ const FileUpload = ({ onUpload, roomId }) => {
                             exit={{ opacity: 0, y: 20 }}
                         >
                             <Paper variant="outlined" sx={{ mt: 2 }}>
-                                <List>
+                                <List dense>
                                     {files.map((file, index) => (
                                         <ListItem
                                             key={index}
@@ -213,26 +182,28 @@ const FileUpload = ({ onUpload, roomId }) => {
                                                 primary={file.name}
                                                 secondary={formatFileSize(file.size)}
                                             />
-                                            {progress[index] !== undefined && (
-                                                <Box sx={{ width: '100px', mr: 2 }}>
-                                                    <LinearProgress
-                                                        variant="determinate"
-                                                        value={progress[index]}
-                                                    />
-                                                </Box>
-                                            )}
                                             <ListItemSecondaryAction>
                                                 <IconButton
                                                     edge="end"
                                                     onClick={() => handleRemoveFile(index)}
                                                     disabled={uploading}
                                                 >
-                                                    <DeleteIcon />
+                                                    <CloseIcon />
                                                 </IconButton>
                                             </ListItemSecondaryAction>
                                         </ListItem>
                                     ))}
                                 </List>
+
+                                {uploading && (
+                                    <Box sx={{ px: 2, pb: 2 }}>
+                                        <LinearProgress
+                                            variant="determinate"
+                                            value={progress}
+                                            sx={{ mt: 1 }}
+                                        />
+                                    </Box>
+                                )}
 
                                 <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
                                     <Button
@@ -241,7 +212,7 @@ const FileUpload = ({ onUpload, roomId }) => {
                                         onClick={handleUpload}
                                         disabled={uploading}
                                     >
-                                        Upload {files.length} file{files.length !== 1 ? 's' : ''}
+                                        Upload
                                     </Button>
                                 </Box>
                             </Paper>
@@ -250,7 +221,6 @@ const FileUpload = ({ onUpload, roomId }) => {
                 </AnimatePresence>
             </Box>
 
-            {/* Preview Dialog */}
             <Dialog
                 open={previewOpen}
                 onClose={() => setPreviewOpen(false)}
@@ -258,7 +228,7 @@ const FileUpload = ({ onUpload, roomId }) => {
                 fullWidth
             >
                 <DialogTitle>
-                    Preview: {previewFile?.name}
+                    Preview
                     <IconButton
                         onClick={() => setPreviewOpen(false)}
                         sx={{ position: 'absolute', right: 8, top: 8 }}
@@ -267,19 +237,17 @@ const FileUpload = ({ onUpload, roomId }) => {
                     </IconButton>
                 </DialogTitle>
                 <DialogContent>
-                    {previewFile && (
-                        <Box
-                            component="img"
-                            src={URL.createObjectURL(previewFile)}
-                            alt="Preview"
-                            sx={{
-                                width: '100%',
-                                height: 'auto',
-                                maxHeight: '70vh',
-                                objectFit: 'contain'
-                            }}
-                        />
-                    )}
+                    <Box
+                        component="img"
+                        src={previewUrl}
+                        alt="Preview"
+                        sx={{
+                            width: '100%',
+                            height: 'auto',
+                            maxHeight: '70vh',
+                            objectFit: 'contain'
+                        }}
+                    />
                 </DialogContent>
             </Dialog>
         </>

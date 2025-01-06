@@ -1,37 +1,51 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { SocketProvider } from './contexts/SocketContext';
-import { AuthProvider } from './contexts/AuthContext';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
-import ResetPassword from './components/ResetPassword';
-import NewPassword from './components/NewPassword';
 import Chat from './components/Chat';
-import PrivateRoute from './components/PrivateRoute';
-import './App.css';
+import ResetPassword from './components/ResetPassword';
 
+// Protected Route Component
+const PrivateRoute = ({ children }) => {
+    const { user } = useAuth();
+    return user ? children : <Navigate to="/login" />;
+};
+
+// Public Route Component (redirects to chat if already logged in)
+const PublicRoute = ({ children }) => {
+    const { user } = useAuth();
+    return !user ? children : <Navigate to="/chat" />;
+};
+
+// Chat component (moved from previous App.js)
 function App() {
     return (
         <Router>
             <AuthProvider>
-                <SocketProvider>
-                    <div className="app">
-                        <Routes>
-                            <Route path="/login" element={<Login />} />
-                            <Route path="/register" element={<Register />} />
-                            <Route path="/reset-password" element={<ResetPassword />} />
-                            <Route path="/reset-password/:token" element={<NewPassword />} />
-                            <Route
-                                path="/"
-                                element={
-                                    <PrivateRoute>
-                                        <Chat />
-                                    </PrivateRoute>
-                                }
-                            />
-                        </Routes>
-                    </div>
-                </SocketProvider>
+                <Routes>
+                    <Route path="/login" element={
+                        <PublicRoute>
+                            <Login />
+                        </PublicRoute>
+                    } />
+                    <Route path="/register" element={
+                        <PublicRoute>
+                            <Register />
+                        </PublicRoute>
+                    } />
+                    <Route path="/reset-password" element={
+                        <PublicRoute>
+                            <ResetPassword />
+                        </PublicRoute>
+                    } />
+                    <Route path="/chat" element={
+                        <PrivateRoute>
+                            <Chat />
+                        </PrivateRoute>
+                    } />
+                    <Route path="/" element={<Navigate to="/chat" />} />
+                </Routes>
             </AuthProvider>
         </Router>
     );

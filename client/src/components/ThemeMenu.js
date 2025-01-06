@@ -1,6 +1,26 @@
-import React from 'react';
-import { IconButton, Menu } from '@mui/material';
-import { Settings as SettingsIcon } from '@mui/icons-material';
+import React, { useState } from 'react';
+import {
+    IconButton,
+    Menu,
+    MenuItem,
+    ListItemIcon,
+    ListItemText,
+    Switch,
+    Typography,
+    Box,
+    Divider,
+    Paper,
+    Tooltip,
+    Fade
+} from '@mui/material';
+import {
+    Palette as PaletteIcon,
+    DarkMode as DarkModeIcon,
+    LightMode as LightModeIcon,
+    FormatPaint as FormatPaintIcon,
+    Contrast as ContrastIcon,
+    Style as StyleIcon
+} from '@mui/icons-material';
 
 const ThemeMenu = ({
     currentTheme = 'dark',
