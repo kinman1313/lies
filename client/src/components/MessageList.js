@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Box, Typography, IconButton } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
-import { PlayArrowIcon } from '@mui/icons-material';
+import { PlayArrow } from '@mui/icons-material';
 
 const MessageList = ({ messages }) => {
     const messagesEndRef = useRef(null);
@@ -73,7 +73,7 @@ const MessageList = ({ messages }) => {
                         {message.type === 'voice' && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <IconButton size="small">
-                                    <PlayArrowIcon />
+                                    <PlayArrow />
                                 </IconButton>
                                 <Typography variant="caption">
                                     Voice message ({message.metadata?.duration || 0}s)
