@@ -308,6 +308,42 @@ export default function Chat() {
                             <EmojiIcon />
                         </IconButton>
                     </Box>
+
+                    {/* Feature Overlays */}
+                    {showGifPicker && (
+                        <Box sx={{ position: 'absolute', bottom: '100%', left: 0, right: 0, mb: 1 }}>
+                            <Paper elevation={3} sx={{ p: 2 }}>
+                                <GifPicker
+                                    onSelect={handleGifSelect}
+                                    onClose={() => setShowGifPicker(false)}
+                                />
+                            </Paper>
+                        </Box>
+                    )}
+
+                    {showVoiceMessage && (
+                        <Box sx={{ position: 'absolute', bottom: '100%', left: 0, right: 0, mb: 1 }}>
+                            <Paper elevation={3} sx={{ p: 2 }}>
+                                <VoiceMessage
+                                    onSend={handleVoiceMessage}
+                                    onClose={() => setShowVoiceMessage(false)}
+                                />
+                            </Paper>
+                        </Box>
+                    )}
+
+                    {showScheduler && (
+                        <Box sx={{ position: 'absolute', bottom: '100%', left: 0, right: 0, mb: 1 }}>
+                            <Paper elevation={3} sx={{ p: 2 }}>
+                                <MessageScheduler
+                                    scheduledMessages={scheduledMessages}
+                                    onSchedule={handleScheduleMessage}
+                                    onClose={() => setShowScheduler(false)}
+                                />
+                            </Paper>
+                        </Box>
+                    )}
+
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <TextField
                             fullWidth
