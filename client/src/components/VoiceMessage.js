@@ -66,23 +66,22 @@ const VoiceMessage = ({ onSend, maxDuration = 300 }) => {
                 audioRef.current.src = url;
             };
 
-            mediaRecorderRef.current.start(10);
-            setIsRecording(true);
+            mediaRecorderRef.current.start();
             startTimeRef.current = Date.now();
+            setIsRecording(true);
+            setIsPaused(false);
 
             const updateDuration = () => {
                 if (isRecording && !isPaused) {
-                    const currentDuration = (Date.now() - startTimeRef.current) / 1000;
-                    setDuration(currentDuration);
-
-                    if (currentDuration >= maxDuration) {
-                        stopRecording();
-                    } else {
+                    const elapsed = (Date.now() - startTimeRef.current) / 1000;
+                    setDuration(elapsed);
+                    if (elapsed < maxDuration) {
                         animationFrameRef.current = requestAnimationFrame(updateDuration);
+                    } else {
+                        stopRecording();
                     }
                 }
             };
-
             updateDuration();
         } catch (error) {
             console.error('Error accessing microphone:', error);
@@ -95,50 +94,21 @@ const VoiceMessage = ({ onSend, maxDuration = 300 }) => {
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
             setIsRecording(false);
             setIsPaused(false);
-        }
-    };
-
-    const togglePause = () => {
-        if (isRecording) {
-            if (isPaused) {
-                mediaRecorderRef.current.resume();
-                startTimeRef.current = Date.now() - (duration * 1000);
-            } else {
-                mediaRecorderRef.current.pause();
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
             }
-            setIsPaused(!isPaused);
         }
     };
 
-    const handlePlayPause = () => {
+    const togglePlayback = () => {
         if (isPlaying) {
             audioRef.current.pause();
+            setIsPlaying(false);
         } else {
             audioRef.current.play();
+            setIsPlaying(true);
         }
-        setIsPlaying(!isPlaying);
     };
-
-    const handleTimeUpdate = () => {
-        setCurrentTime(audioRef.current.currentTime);
-    };
-
-    const handleSliderChange = (event, newValue) => {
-        const time = (newValue / 100) * audioRef.current.duration;
-        audioRef.current.currentTime = time;
-        setCurrentTime(time);
-    };
-
-    useEffect(() => {
-        const audio = audioRef.current;
-        audio.addEventListener('timeupdate', handleTimeUpdate);
-        audio.addEventListener('ended', () => setIsPlaying(false));
-
-        return () => {
-            audio.removeEventListener('timeupdate', handleTimeUpdate);
-            audio.removeEventListener('ended', () => setIsPlaying(false));
-        };
-    }, []);
 
     const handleSend = () => {
         if (audioUrl) {
@@ -149,123 +119,107 @@ const VoiceMessage = ({ onSend, maxDuration = 300 }) => {
         }
     };
 
-    const handleDelete = () => {
-        if (audioUrl) {
-            URL.revokeObjectURL(audioUrl);
-            setAudioUrl(null);
-            setDuration(0);
+    useEffect(() => {
+        audioRef.current.onended = () => {
+            setIsPlaying(false);
             setCurrentTime(0);
-        }
-    };
+        };
+
+        audioRef.current.ontimeupdate = () => {
+            setCurrentTime(audioRef.current.currentTime);
+        };
+    }, []);
 
     return (
-        <Box>
-            <Paper
-                variant="outlined"
-                sx={{
-                    p: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    bgcolor: 'background.paper'
-                }}
-            >
-                <AnimatePresence mode="wait">
-                    {!isRecording && !audioUrl && (
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            exit={{ scale: 0 }}
-                        >
-                            <Tooltip title="Record Voice Message">
-                                <IconButton
-                                    color="primary"
-                                    onClick={startRecording}
-                                    sx={{
-                                        width: 48,
-                                        height: 48,
-                                        '&:hover': {
-                                            backgroundColor: 'primary.dark'
-                                        }
-                                    }}
-                                >
-                                    <MicIcon />
-                                </IconButton>
-                            </Tooltip>
-                        </motion.div>
-                    )}
+        <Box sx={{ width: '100%' }}>
+            <AnimatePresence>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                >
+                    <Paper
+                        elevation={3}
+                        sx={{
+                            p: 2,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                            alignItems: 'center'
+                        }}
+                    >
+                        <Typography variant="h6" gutterBottom>
+                            Voice Message
+                        </Typography>
 
-                    {isRecording && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 16 }}
-                        >
-                            <Box sx={{ position: 'relative' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            {!isRecording && !audioUrl && (
+                                <Tooltip title="Start Recording">
+                                    <IconButton
+                                        color="primary"
+                                        onClick={startRecording}
+                                        sx={{ width: 56, height: 56 }}
+                                    >
+                                        <MicIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {isRecording && (
+                                <Tooltip title="Stop Recording">
+                                    <IconButton
+                                        color="error"
+                                        onClick={stopRecording}
+                                        sx={{ width: 56, height: 56 }}
+                                    >
+                                        <StopIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            )}
+
+                            {audioUrl && (
+                                <>
+                                    <IconButton onClick={togglePlayback}>
+                                        {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                                    </IconButton>
+                                    <Box sx={{ width: 200 }}>
+                                        <Slider
+                                            value={isPlaying ? currentTime : 0}
+                                            max={duration}
+                                            onChange={(_, value) => {
+                                                audioRef.current.currentTime = value;
+                                                setCurrentTime(value);
+                                            }}
+                                        />
+                                    </Box>
+                                    <Typography variant="caption">
+                                        {formatTime(currentTime)} / {formatTime(duration)}
+                                    </Typography>
+                                    <IconButton color="error" onClick={() => setAudioUrl(null)}>
+                                        <DeleteIcon />
+                                    </IconButton>
+                                    <IconButton color="primary" onClick={handleSend}>
+                                        <SendIcon />
+                                    </IconButton>
+                                </>
+                            )}
+                        </Box>
+
+                        {isRecording && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <CircularProgress
                                     variant="determinate"
                                     value={(duration / maxDuration) * 100}
-                                    size={48}
+                                    size={24}
                                 />
-                                <IconButton
-                                    color="error"
-                                    onClick={stopRecording}
-                                    sx={{
-                                        position: 'absolute',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%)'
-                                    }}
-                                >
-                                    <StopIcon />
-                                </IconButton>
-                            </Box>
-                            <Typography variant="body2">
-                                {formatTime(duration)}
-                            </Typography>
-                            <IconButton onClick={togglePause}>
-                                {isPaused ? <PlayIcon /> : <PauseIcon />}
-                            </IconButton>
-                        </motion.div>
-                    )}
-
-                    {audioUrl && !isRecording && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%' }}
-                        >
-                            <IconButton onClick={handlePlayPause}>
-                                {isPlaying ? <PauseIcon /> : <PlayIcon />}
-                            </IconButton>
-                            <Box sx={{ flexGrow: 1, mx: 2 }}>
-                                <Slider
-                                    value={(currentTime / audioRef.current.duration) * 100 || 0}
-                                    onChange={handleSliderChange}
-                                    sx={{
-                                        color: 'primary.main',
-                                        '& .MuiSlider-thumb': {
-                                            width: 12,
-                                            height: 12
-                                        }
-                                    }}
-                                />
-                                <Typography variant="caption" color="text.secondary">
-                                    {formatTime(currentTime)} / {formatTime(audioRef.current.duration || 0)}
+                                <Typography variant="body2">
+                                    {formatTime(duration)} / {formatTime(maxDuration)}
                                 </Typography>
                             </Box>
-                            <IconButton color="error" onClick={handleDelete}>
-                                <DeleteIcon />
-                            </IconButton>
-                            <IconButton color="primary" onClick={handleSend}>
-                                <SendIcon />
-                            </IconButton>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </Paper>
+                        )}
+                    </Paper>
+                </motion.div>
+            </AnimatePresence>
         </Box>
     );
 };

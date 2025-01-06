@@ -48,91 +48,28 @@ const MessageBubble = ({ message, isOwn }) => {
                     background: isOwn
                         ? `linear-gradient(145deg, ${messageColor}CC, ${messageColor}99)`
                         : 'rgba(19, 47, 76, 0.4)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    '&::before': bubbleStyle === 'modern' ? {
-                        content: '""',
-                        position: 'absolute',
-                        width: '20px',
-                        height: '20px',
-                        [isOwn ? 'right' : 'left']: '-10px',
-                        bottom: '8px',
-                        background: isOwn
-                            ? `linear-gradient(145deg, ${messageColor}CC, ${messageColor}99)`
-                            : 'rgba(19, 47, 76, 0.4)',
-                        transform: isOwn ? 'rotate(-45deg)' : 'rotate(45deg)',
-                        clipPath: 'polygon(0 0, 100% 100%, 100% 0)',
-                        borderRadius: '4px'
-                    } : {}
+                    color: isOwn ? '#fff' : 'inherit',
+                    overflow: 'hidden'
                 }}
             >
-                {!message.system && (
-                    <Typography
-                        variant="subtitle2"
-                        sx={{
-                            color: isOwn ? 'white' : 'primary.main',
-                            mb: 0.5
-                        }}
-                    >
-                        {isOwn ? 'You' : message.username}
-                    </Typography>
-                )}
-
-                {message.type === 'gif' ? (
+                {message.text?.startsWith('[GIF]') ? (
                     <Box
-                        component={motion.div}
-                        layoutId={`gif-${message.gif.url}`}
+                        component="img"
+                        src={message.text.replace('[GIF] ', '')}
+                        alt="GIF"
                         sx={{
-                            position: 'relative',
                             width: '100%',
-                            borderRadius: 1,
-                            overflow: 'hidden',
-                            '&::before': {
-                                content: '""',
-                                display: 'block',
-                                paddingTop: `${(message.gif.height / message.gif.width) * 100}%`
-                            }
+                            height: 'auto',
+                            maxHeight: '200px',
+                            objectFit: 'cover',
+                            borderRadius: bubbleStyle === 'modern' ? '12px' : '4px'
                         }}
-                    >
-                        <motion.img
-                            src={message.gif.url}
-                            alt="GIF"
-                            style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover'
-                            }}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                        />
-                    </Box>
+                    />
                 ) : (
-                    <Typography
-                        variant="body1"
-                        sx={{
-                            color: isOwn ? 'white' : 'text.primary',
-                            wordBreak: 'break-word'
-                        }}
-                    >
+                    <Typography variant="body1">
                         {message.text}
                     </Typography>
                 )}
-
-                <Typography
-                    variant="caption"
-                    sx={{
-                        color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                        display: 'block',
-                        textAlign: 'right',
-                        mt: 0.5
-                    }}
-                >
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                </Typography>
             </Paper>
         </motion.div>
     );

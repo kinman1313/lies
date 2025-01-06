@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import MessageBubble from './MessageBubble';
+import MessageReactions from './MessageReactions';
 
 const MessageThread = ({
     message,
@@ -34,7 +35,9 @@ const MessageThread = ({
     onReply,
     onLoadMore,
     hasMoreReplies = false,
-    isLoadingReplies = false
+    isLoadingReplies = false,
+    onAddReaction,
+    onRemoveReaction
 }) => {
     const { user: currentUser } = useAuth();
     const [expanded, setExpanded] = useState(false);
@@ -97,6 +100,14 @@ const MessageThread = ({
                             message={message}
                             isOwn={message?.user?.id === currentUser?.id}
                         />
+                        <Box sx={{ mt: 1, mb: 1 }}>
+                            <MessageReactions
+                                reactions={message.reactions || []}
+                                onAddReaction={(emoji) => onAddReaction(message.id, emoji)}
+                                onRemoveReaction={(emoji) => onRemoveReaction(message.id, emoji)}
+                                currentUserId={currentUser?.id}
+                            />
+                        </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                             <Button
                                 size="small"

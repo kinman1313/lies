@@ -50,78 +50,114 @@ const GifPicker = ({ onSelect, onClose }) => {
     const handleSearch = (e) => {
         e.preventDefault();
         if (searchQuery.trim()) {
-            fetchGifs('search', { q: searchQuery });
+            fetchGifs('search', { q: searchQuery.trim() });
         }
     };
 
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            handleSearch(e);
+        }
+    };
+
+    const handleGifSelect = (gif) => {
+        onSelect({
+            url: gif.images.fixed_height.url,
+            width: gif.images.fixed_height.width,
+            height: gif.images.fixed_height.height,
+            title: gif.title
+        });
+        onClose();
+    };
+
     return (
-        <Paper
-            elevation={3}
-            sx={{
-                p: 2,
-                maxHeight: 400,
-                display: 'flex',
-                flexDirection: 'column'
-            }}
-        >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <form onSubmit={handleSearch} style={{ flex: 1, display: 'flex', gap: 8 }}>
+        <Box sx={{ width: '100%', maxWidth: 600, margin: '0 auto' }}>
+            <Paper
+                elevation={3}
+                sx={{
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    maxHeight: '70vh',
+                    overflow: 'hidden'
+                }}
+            >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="h6">
+                        Select a GIF
+                    </Typography>
+                    <IconButton onClick={onClose} size="small">
+                        <CloseIcon />
+                    </IconButton>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
                         fullWidth
                         size="small"
+                        placeholder="Search GIFs..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search GIFs..."
-                        variant="outlined"
+                        onKeyPress={handleKeyPress}
+                        InputProps={{
+                            endAdornment: (
+                                <IconButton
+                                    size="small"
+                                    onClick={handleSearch}
+                                    disabled={loading}
+                                >
+                                    <SearchIcon />
+                                </IconButton>
+                            )
+                        }}
                     />
-                    <IconButton type="submit" color="primary">
-                        <SearchIcon />
-                    </IconButton>
-                </form>
-                <IconButton onClick={onClose}>
-                    <CloseIcon />
-                </IconButton>
-            </Box>
+                </Box>
 
-            {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                    <CircularProgress />
-                </Box>
-            ) : error ? (
-                <Typography color="error" align="center">
-                    {error}
-                </Typography>
-            ) : (
-                <Box sx={{ overflow: 'auto' }}>
-                    <ImageList cols={3} gap={8}>
-                        {gifs.map((gif) => (
-                            <ImageListItem
-                                key={gif.id}
-                                sx={{
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                        opacity: 0.8
-                                    }
-                                }}
-                                onClick={() => onSelect(gif.images.fixed_height)}
-                            >
-                                <img
-                                    src={gif.images.fixed_height.url}
-                                    alt={gif.title}
-                                    loading="lazy"
-                                    style={{
-                                        borderRadius: 4,
-                                        maxHeight: 150,
-                                        width: '100%',
-                                        objectFit: 'cover'
+                {error && (
+                    <Typography color="error" variant="body2" align="center">
+                        {error}
+                    </Typography>
+                )}
+
+                <Box sx={{ overflow: 'auto', flexGrow: 1 }}>
+                    {loading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <ImageList cols={3} gap={8} sx={{ m: 0 }}>
+                            {gifs.map((gif) => (
+                                <ImageListItem
+                                    key={gif.id}
+                                    sx={{
+                                        cursor: 'pointer',
+                                        '&:hover': {
+                                            opacity: 0.8,
+                                            transform: 'scale(1.02)',
+                                            transition: 'all 0.2s ease-in-out'
+                                        }
                                     }}
-                                />
-                            </ImageListItem>
-                        ))}
-                    </ImageList>
+                                    onClick={() => handleGifSelect(gif)}
+                                >
+                                    <img
+                                        src={gif.images.fixed_height.url}
+                                        alt={gif.title}
+                                        loading="lazy"
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            borderRadius: '4px'
+                                        }}
+                                    />
+                                </ImageListItem>
+                            ))}
+                        </ImageList>
+                    )}
                 </Box>
-            )}
-        </Paper>
+            </Paper>
+        </Box>
     );
 };
 

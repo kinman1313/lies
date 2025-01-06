@@ -66,10 +66,11 @@ const MessageScheduler = ({
 
     const handleSchedule = () => {
         const scheduleData = {
+            id: editingMessage?.id || Date.now(),
             message,
-            scheduledFor: selectedDate,
+            scheduledDate: selectedDate,
             repeat: repeat.enabled ? repeat : null,
-            id: editingMessage ? editingMessage.id : Date.now()
+            status: 'pending'
         };
 
         if (editingMessage) {
@@ -84,7 +85,7 @@ const MessageScheduler = ({
     const handleEdit = (message) => {
         setEditingMessage(message);
         setMessage(message.message);
-        setSelectedDate(new Date(message.scheduledFor));
+        setSelectedDate(new Date(message.scheduledDate));
         setRepeat(message.repeat || {
             enabled: false,
             interval: 'daily',
@@ -98,78 +99,129 @@ const MessageScheduler = ({
     };
 
     const getRepeatText = (repeat) => {
-        if (!repeat || !repeat.enabled) return '';
-        return `Repeats ${repeat.interval}${repeat.endDate ? ` until ${formatDateTime(repeat.endDate)}` : ''}`;
+        if (!repeat?.enabled) return 'No repeat';
+        return `Repeats ${repeat.interval} until ${repeat.endDate ? formatDateTime(repeat.endDate) : 'forever'}`;
     };
 
     return (
-        <>
-            <Tooltip title="Schedule Message">
-                <IconButton onClick={handleOpen} color="primary">
-                    <ScheduleIcon />
-                </IconButton>
-            </Tooltip>
+        <Box sx={{ width: '100%' }}>
+            <Paper elevation={3} sx={{ p: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6">
+                        Scheduled Messages
+                    </Typography>
+                    <Button
+                        variant="contained"
+                        startIcon={<ScheduleIcon />}
+                        onClick={handleOpen}
+                    >
+                        Schedule New
+                    </Button>
+                </Box>
+
+                <List>
+                    {scheduledMessages.map((msg) => (
+                        <React.Fragment key={msg.id}>
+                            <ListItem>
+                                <ListItemText
+                                    primary={msg.message}
+                                    secondary={
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <CalendarIcon fontSize="small" color="action" />
+                                                <Typography variant="body2">
+                                                    {formatDateTime(msg.scheduledDate)}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <RepeatIcon fontSize="small" color="action" />
+                                                <Typography variant="body2">
+                                                    {getRepeatText(msg.repeat)}
+                                                </Typography>
+                                            </Box>
+                                        </Box>
+                                    }
+                                />
+                                <ListItemSecondaryAction>
+                                    <Tooltip title="Edit">
+                                        <IconButton edge="end" onClick={() => handleEdit(msg)} sx={{ mr: 1 }}>
+                                            <EditIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete">
+                                        <IconButton edge="end" onClick={() => onDelete(msg.id)}>
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                </ListItemSecondaryAction>
+                            </ListItem>
+                            <Divider />
+                        </React.Fragment>
+                    ))}
+                    {scheduledMessages.length === 0 && (
+                        <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                            No scheduled messages
+                        </Typography>
+                    )}
+                </List>
+            </Paper>
 
             <Dialog
                 open={open}
                 onClose={handleClose}
                 maxWidth="sm"
                 fullWidth
-                PaperProps={{
-                    component: motion.div,
-                    initial: { y: 20, opacity: 0 },
-                    animate: { y: 0, opacity: 1 },
-                    exit: { y: 20, opacity: 0 }
-                }}
             >
                 <DialogTitle>
-                    {editingMessage ? 'Edit Scheduled Message' : 'Schedule Message'}
+                    {editingMessage ? 'Edit Scheduled Message' : 'Schedule New Message'}
                 </DialogTitle>
                 <DialogContent>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
                         <TextField
-                            label="Message"
+                            fullWidth
                             multiline
                             rows={4}
-                            fullWidth
+                            label="Message"
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
+                            placeholder="Type your message..."
                         />
 
                         <LocalizationProvider dateAdapter={AdapterDateFns}>
                             <DateTimePicker
-                                label="Schedule For"
+                                label="Schedule Date & Time"
                                 value={selectedDate}
-                                onChange={(newValue) => setSelectedDate(newValue)}
-                                renderInput={(params) => <TextField {...params} />}
+                                onChange={setSelectedDate}
                                 minDateTime={new Date()}
+                                renderInput={(params) => <TextField {...params} fullWidth />}
                             />
                         </LocalizationProvider>
 
-                        <Paper variant="outlined" sx={{ p: 2 }}>
+                        <Box>
                             <FormControlLabel
                                 control={
                                     <Switch
                                         checked={repeat.enabled}
-                                        onChange={(e) => setRepeat({
-                                            ...repeat,
+                                        onChange={(e) => setRepeat(prev => ({
+                                            ...prev,
                                             enabled: e.target.checked
-                                        })}
+                                        }))}
                                     />
                                 }
-                                label="Repeat Message"
+                                label="Repeat"
                             />
 
                             {repeat.enabled && (
                                 <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                                     <TextField
                                         select
+                                        fullWidth
                                         label="Repeat Interval"
                                         value={repeat.interval}
-                                        onChange={(e) => setRepeat({
-                                            ...repeat,
+                                        onChange={(e) => setRepeat(prev => ({
+                                            ...prev,
                                             interval: e.target.value
-                                        })}
+                                        }))}
                                         SelectProps={{
                                             native: true
                                         }}
@@ -183,91 +235,31 @@ const MessageScheduler = ({
                                         <DateTimePicker
                                             label="End Date (Optional)"
                                             value={repeat.endDate}
-                                            onChange={(newValue) => setRepeat({
-                                                ...repeat,
-                                                endDate: newValue
-                                            })}
-                                            renderInput={(params) => <TextField {...params} />}
+                                            onChange={(date) => setRepeat(prev => ({
+                                                ...prev,
+                                                endDate: date
+                                            }))}
                                             minDateTime={selectedDate}
+                                            renderInput={(params) => <TextField {...params} fullWidth />}
                                         />
                                     </LocalizationProvider>
                                 </Box>
                             )}
-                        </Paper>
+                        </Box>
                     </Box>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleClose}>Cancel</Button>
                     <Button
-                        onClick={handleSchedule}
                         variant="contained"
+                        onClick={handleSchedule}
                         disabled={!message.trim() || !selectedDate}
                     >
                         {editingMessage ? 'Update' : 'Schedule'}
                     </Button>
                 </DialogActions>
             </Dialog>
-
-            <AnimatePresence>
-                {scheduledMessages.length > 0 && (
-                    <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                    >
-                        <Paper
-                            variant="outlined"
-                            sx={{ mt: 2, overflow: 'hidden' }}
-                        >
-                            <List dense>
-                                {scheduledMessages.map((msg, index) => (
-                                    <React.Fragment key={msg.id}>
-                                        <ListItem>
-                                            <ListItemText
-                                                primary={msg.message}
-                                                secondary={
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                        <CalendarIcon fontSize="small" />
-                                                        <Typography variant="caption">
-                                                            {formatDateTime(msg.scheduledFor)}
-                                                        </Typography>
-                                                        {msg.repeat?.enabled && (
-                                                            <>
-                                                                <RepeatIcon fontSize="small" />
-                                                                <Typography variant="caption">
-                                                                    {getRepeatText(msg.repeat)}
-                                                                </Typography>
-                                                            </>
-                                                        )}
-                                                    </Box>
-                                                }
-                                            />
-                                            <ListItemSecondaryAction>
-                                                <IconButton
-                                                    edge="end"
-                                                    onClick={() => handleEdit(msg)}
-                                                    sx={{ mr: 1 }}
-                                                >
-                                                    <EditIcon />
-                                                </IconButton>
-                                                <IconButton
-                                                    edge="end"
-                                                    onClick={() => onDelete(msg.id)}
-                                                    color="error"
-                                                >
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </ListItemSecondaryAction>
-                                        </ListItem>
-                                        {index < scheduledMessages.length - 1 && <Divider />}
-                                    </React.Fragment>
-                                ))}
-                            </List>
-                        </Paper>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </>
+        </Box>
     );
 };
 

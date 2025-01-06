@@ -59,7 +59,23 @@ export default function Chat() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const typingTimeoutRef = useRef(null);
-    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [drawerOpen, setDrawerOpen] = useState(window.innerWidth >= 600);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 600);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 600;
+            setIsMobile(mobile);
+            if (!mobile && !drawerOpen) {
+                setDrawerOpen(true);
+            } else if (mobile && drawerOpen) {
+                setDrawerOpen(false);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [drawerOpen]);
 
     useEffect(() => {
         const newSocket = io(config.SOCKET_URL, {
@@ -70,57 +86,62 @@ export default function Chat() {
         // Join chat with authenticated username
         newSocket.emit('join', user.username);
 
+        newSocket.on('message', (message) => {
+            setMessages(prev => [...prev, message]);
+            scrollToBottom();
+        });
+
+        newSocket.on('userJoined', (username) => {
+            setUsers(prev => [...prev, username]);
+        });
+
+        newSocket.on('userLeft', (username) => {
+            setUsers(prev => prev.filter(u => u !== username));
+        });
+
+        newSocket.on('typing', (username) => {
+            setTypingUsers(prev => {
+                if (!prev.includes(username)) {
+                    return [...prev, username];
+                }
+                return prev;
+            });
+        });
+
+        newSocket.on('stopTyping', (username) => {
+            setTypingUsers(prev => prev.filter(u => u !== username));
+        });
+
+        newSocket.on('reaction', ({ messageId, emoji, userId, type }) => {
+            setMessages(messages => messages.map(msg => {
+                if (msg.id === messageId) {
+                    const reactions = msg.reactions || [];
+                    if (type === 'add') {
+                        const existingReaction = reactions.find(r => r.emoji === emoji);
+                        if (existingReaction) {
+                            existingReaction.count++;
+                            existingReaction.users.push(userId);
+                        } else {
+                            reactions.push({ emoji, count: 1, users: [userId] });
+                        }
+                    } else if (type === 'remove') {
+                        const existingReaction = reactions.find(r => r.emoji === emoji);
+                        if (existingReaction) {
+                            existingReaction.count--;
+                            existingReaction.users = existingReaction.users.filter(id => id !== userId);
+                            if (existingReaction.count <= 0) {
+                                return { ...msg, reactions: reactions.filter(r => r.emoji !== emoji) };
+                            }
+                        }
+                    }
+                    return { ...msg, reactions };
+                }
+                return msg;
+            }));
+        });
+
         return () => newSocket.close();
     }, [user.username]);
-
-    useEffect(() => {
-        if (!socket) return;
-
-        socket.on('message', (message) => {
-            setMessages((prev) => [...prev, message]);
-        });
-
-        socket.on('userJoined', ({ username, users }) => {
-            setMessages((prev) => [...prev, {
-                text: `${username} joined the chat`,
-                system: true,
-                timestamp: new Date().toISOString()
-            }]);
-            setUsers(users);
-        });
-
-        socket.on('userLeft', ({ username, users }) => {
-            setMessages((prev) => [...prev, {
-                text: `${username} left the chat`,
-                system: true,
-                timestamp: new Date().toISOString()
-            }]);
-            setUsers(users);
-        });
-
-        socket.on('typing', ({ username }) => {
-            if (username !== user.username) {
-                setTypingUsers(prev => {
-                    if (!prev.includes(username)) {
-                        return [...prev, username];
-                    }
-                    return prev;
-                });
-            }
-        });
-
-        socket.on('stopTyping', ({ username }) => {
-            setTypingUsers(prev => prev.filter(user => user !== username));
-        });
-
-        return () => {
-            socket.off('message');
-            socket.off('userJoined');
-            socket.off('userLeft');
-            socket.off('typing');
-            socket.off('stopTyping');
-        };
-    }, [socket, user.username]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -172,6 +193,49 @@ export default function Chat() {
         // Here you would typically also send this to the server
     };
 
+    const handleAddReaction = (messageId, emoji) => {
+        if (socket) {
+            socket.emit('reaction', { messageId, emoji, type: 'add' });
+            // Optimistically update the UI
+            setMessages(messages => messages.map(msg => {
+                if (msg.id === messageId) {
+                    const reactions = msg.reactions || [];
+                    const existingReaction = reactions.find(r => r.emoji === emoji);
+                    if (existingReaction) {
+                        existingReaction.count++;
+                        existingReaction.users.push(user.id);
+                    } else {
+                        reactions.push({ emoji, count: 1, users: [user.id] });
+                    }
+                    return { ...msg, reactions };
+                }
+                return msg;
+            }));
+        }
+    };
+
+    const handleRemoveReaction = (messageId, emoji) => {
+        if (socket) {
+            socket.emit('reaction', { messageId, emoji, type: 'remove' });
+            // Optimistically update the UI
+            setMessages(messages => messages.map(msg => {
+                if (msg.id === messageId) {
+                    const reactions = msg.reactions || [];
+                    const existingReaction = reactions.find(r => r.emoji === emoji);
+                    if (existingReaction) {
+                        existingReaction.count--;
+                        existingReaction.users = existingReaction.users.filter(id => id !== user.id);
+                        if (existingReaction.count <= 0) {
+                            return { ...msg, reactions: reactions.filter(r => r.emoji !== emoji) };
+                        }
+                    }
+                    return { ...msg, reactions };
+                }
+                return msg;
+            }));
+        }
+    };
+
     const handleLogout = async () => {
         try {
             if (socket) {
@@ -208,7 +272,9 @@ export default function Chat() {
 
             {/* Side Drawer for Online Users */}
             <Drawer
-                variant="permanent"
+                variant={window.innerWidth < 600 ? 'temporary' : 'permanent'}
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
                 sx={{
                     width: drawerWidth,
                     flexShrink: 0,
@@ -216,6 +282,7 @@ export default function Chat() {
                         width: drawerWidth,
                         boxSizing: 'border-box',
                     },
+                    display: { xs: drawerOpen ? 'block' : 'none', sm: 'block' }
                 }}
             >
                 <Toolbar /> {/* Spacer for AppBar */}
@@ -254,7 +321,14 @@ export default function Chat() {
                     flexGrow: 1,
                     p: 3,
                     mt: 8, // Add margin top to account for AppBar
-                    width: { sm: `calc(100% - ${drawerWidth}px)` },
+                    width: {
+                        xs: '100%',
+                        sm: `calc(100% - ${drawerWidth}px)`
+                    },
+                    marginLeft: {
+                        xs: 0,
+                        sm: `${drawerWidth}px`
+                    },
                     marginRight: showProfile ? '300px' : 0,
                     transition: 'margin 0.3s ease-in-out'
                 }}
@@ -278,6 +352,8 @@ export default function Chat() {
                                     socket.emit('message', `@${message.username} ${reply.text}`);
                                 }
                             }}
+                            onAddReaction={handleAddReaction}
+                            onRemoveReaction={handleRemoveReaction}
                         />
                     ))}
                     <div ref={messagesEndRef} />
