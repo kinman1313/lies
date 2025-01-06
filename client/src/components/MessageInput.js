@@ -17,13 +17,14 @@ import {
     Mic as MicIcon,
     GifBox as GifIcon,
     AttachFile as AttachFileIcon,
-    Stop as StopIcon
+    Stop as StopIcon,
+    AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import GifPicker from './GifPicker';
 
-const MessageInput = ({ onSendMessage, onTyping }) => {
+const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
     const { user } = useAuth();
     const [message, setMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
@@ -196,38 +197,59 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
             bottom: 0,
             left: 0,
             right: 0,
-            backgroundColor: 'background.paper',
+            backgroundColor: 'background.default',
             borderTop: 1,
             borderColor: 'divider',
-            zIndex: 1000
+            p: 2
         }}>
-            {selectedFile && (
-                <Box sx={{
-                    p: 1,
-                    backgroundColor: 'action.hover',
-                    borderRadius: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    mx: 2,
-                    mt: 1
-                }}>
-                    <Typography variant="body2" noWrap>
-                        {selectedFile.name}
-                    </Typography>
-                    <IconButton size="small" onClick={() => setSelectedFile(null)}>
-                        <StopIcon fontSize="small" />
-                    </IconButton>
-                </Box>
+            {/* Typing indicator */}
+            {typingUsers?.length > 0 && (
+                <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ pl: 2, pb: 1, display: 'block' }}
+                >
+                    {`[object Object] and ${typingUsers.length - 1} others are typing...`}
+                </Typography>
             )}
 
+            {/* Message input area */}
             <Box sx={{
                 display: 'flex',
-                alignItems: 'flex-end',
+                alignItems: 'center',
                 gap: 1,
-                p: 2,
-                pt: selectedFile ? 1 : 2
+                backgroundColor: 'background.paper',
+                borderRadius: 2,
+                p: 1
             }}>
+                {/* GIF button */}
+                <IconButton
+                    onClick={() => setGifDialogOpen(true)}
+                    size="medium"
+                    sx={{ color: 'text.secondary' }}
+                >
+                    <GifIcon />
+                </IconButton>
+
+                {/* Voice message button */}
+                <IconButton
+                    onClick={isRecording ? handleStopRecording : handleStartRecording}
+                    color={isRecording ? 'error' : 'default'}
+                    size="medium"
+                    sx={{ color: 'text.secondary' }}
+                >
+                    <MicIcon />
+                </IconButton>
+
+                {/* Timer button */}
+                <IconButton
+                    size="medium"
+                    sx={{ color: 'text.secondary' }}
+                >
+                    <AccessTimeIcon />
+                </IconButton>
+
+                {/* Message input */}
                 <TextField
                     fullWidth
                     multiline
@@ -237,104 +259,30 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
                     onKeyPress={handleKeyPress}
                     placeholder={isRecording ? 'Recording...' : 'Type a message...'}
                     disabled={isRecording}
+                    variant="standard"
                     InputProps={{
-                        endAdornment: isRecording && (
-                            <Typography variant="caption" color="primary" sx={{ mr: 1 }}>
-                                {formatRecordingTime(recordingTime)}
-                            </Typography>
-                        ),
+                        disableUnderline: true,
                         sx: {
-                            alignItems: 'center',
-                            p: 1
-                        }
-                    }}
-                    sx={{
-                        '& .MuiOutlinedInput-root': {
-                            borderRadius: 2
+                            p: 1,
+                            '&.Mui-focused': {
+                                backgroundColor: 'transparent'
+                            }
                         }
                     }}
                 />
 
-                <AnimatePresence>
-                    {!isRecording && (
-                        <>
-                            <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                exit={{ scale: 0 }}
-                            >
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    onChange={handleFileSelect}
-                                    style={{ display: 'none' }}
-                                    accept="image/*,video/*,audio/*,application/pdf"
-                                />
-                                <Tooltip title="Attach File">
-                                    <IconButton
-                                        onClick={() => fileInputRef.current.click()}
-                                        disabled={isUploading}
-                                        size="medium"
-                                    >
-                                        <AttachFileIcon />
-                                    </IconButton>
-                                </Tooltip>
-                            </motion.div>
-
-                            <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                exit={{ scale: 0 }}
-                            >
-                                <Tooltip title="Send GIF">
-                                    <IconButton
-                                        onClick={() => setGifDialogOpen(true)}
-                                        disabled={isUploading}
-                                        size="medium"
-                                    >
-                                        <GifIcon />
-                                    </IconButton>
-                                </Tooltip>
-                            </motion.div>
-                        </>
-                    )}
-
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        exit={{ scale: 0 }}
-                    >
-                        <Tooltip title={isRecording ? 'Stop Recording' : 'Record Voice Message'}>
-                            <IconButton
-                                onClick={isRecording ? handleStopRecording : handleStartRecording}
-                                color={isRecording ? 'error' : 'default'}
-                                disabled={isUploading}
-                                size="medium"
-                            >
-                                {isRecording ? <StopIcon /> : <MicIcon />}
-                            </IconButton>
-                        </Tooltip>
-                    </motion.div>
-
-                    <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        exit={{ scale: 0 }}
-                    >
-                        <Tooltip title="Send Message">
-                            <IconButton
-                                onClick={handleSendMessage}
-                                color="primary"
-                                disabled={isUploading || (!message.trim() && !selectedFile)}
-                                size="medium"
-                            >
-                                {isUploading ? <CircularProgress size={24} /> : <SendIcon />}
-                            </IconButton>
-                        </Tooltip>
-                    </motion.div>
-                </AnimatePresence>
+                {/* Send button */}
+                <IconButton
+                    onClick={handleSendMessage}
+                    color="primary"
+                    disabled={isUploading || (!message.trim() && !selectedFile)}
+                    size="medium"
+                >
+                    {isUploading ? <CircularProgress size={24} /> : <SendIcon />}
+                </IconButton>
             </Box>
 
+            {/* GIF Dialog */}
             <Dialog
                 open={gifDialogOpen}
                 onClose={() => setGifDialogOpen(false)}
