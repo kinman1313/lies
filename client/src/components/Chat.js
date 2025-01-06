@@ -59,6 +59,7 @@ export default function Chat() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const typingTimeoutRef = useRef(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
 
     useEffect(() => {
         const newSocket = io(config.SOCKET_URL, {
@@ -185,17 +186,80 @@ export default function Chat() {
 
     return (
         <Box sx={{ display: 'flex', height: '100vh' }}>
+            {/* App Bar */}
+            <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+                <Toolbar>
+                    <IconButton
+                        color="inherit"
+                        edge="start"
+                        onClick={() => setDrawerOpen(!drawerOpen)}
+                        sx={{ mr: 2 }}
+                    >
+                        <MenuIcon />
+                    </IconButton>
+                    <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+                        Chat Room
+                    </Typography>
+                    <IconButton color="inherit" onClick={() => setShowProfile(!showProfile)}>
+                        <PersonIcon />
+                    </IconButton>
+                </Toolbar>
+            </AppBar>
+
+            {/* Side Drawer for Online Users */}
+            <Drawer
+                variant="permanent"
+                sx={{
+                    width: drawerWidth,
+                    flexShrink: 0,
+                    '& .MuiDrawer-paper': {
+                        width: drawerWidth,
+                        boxSizing: 'border-box',
+                    },
+                }}
+            >
+                <Toolbar /> {/* Spacer for AppBar */}
+                <Box sx={{ overflow: 'auto' }}>
+                    <List>
+                        <ListItem>
+                            <Typography variant="subtitle1" color="primary">
+                                Online Users ({users.length})
+                            </Typography>
+                        </ListItem>
+                        {users.map((username, index) => (
+                            <ListItem key={index}>
+                                <ListItemIcon>
+                                    <PersonIcon />
+                                </ListItemIcon>
+                                <ListItemText primary={username} />
+                            </ListItem>
+                        ))}
+                    </List>
+                    <Divider />
+                    <List>
+                        <ListItem button onClick={handleLogout}>
+                            <ListItemIcon>
+                                <LogoutIcon />
+                            </ListItemIcon>
+                            <ListItemText primary="Logout" />
+                        </ListItem>
+                    </List>
+                </Box>
+            </Drawer>
+
+            {/* Main Chat Area */}
             <Box
                 component="main"
                 sx={{
                     flexGrow: 1,
                     p: 3,
+                    mt: 8, // Add margin top to account for AppBar
                     width: { sm: `calc(100% - ${drawerWidth}px)` },
                     marginRight: showProfile ? '300px' : 0,
                     transition: 'margin 0.3s ease-in-out'
                 }}
             >
-                <Box sx={{ height: 'calc(100vh - 140px)', overflow: 'auto', mb: 2 }}>
+                <Box sx={{ height: 'calc(100vh - 180px)', overflow: 'auto', mb: 2 }}>
                     {messages.map((message, index) => (
                         <MessageThread
                             key={index}
@@ -214,79 +278,57 @@ export default function Chat() {
                                     socket.emit('message', `@${message.username} ${reply.text}`);
                                 }
                             }}
-                        >
-                            <Paper
-                                elevation={1}
-                                sx={{
-                                    p: 1,
-                                    maxWidth: '70%',
-                                    bgcolor: message.system
-                                        ? 'grey.100'
-                                        : message.username === user.username
-                                            ? 'primary.light'
-                                            : 'background.paper'
-                                }}
-                            >
-                                <ListItemText
-                                    primary={
-                                        message.system ? (
-                                            <Typography variant="body2" color="text.secondary">
-                                                {message.text}
-                                            </Typography>
-                                        ) : (
-                                            <>
-                                                <Typography variant="subtitle2" color={
-                                                    message.username === user.username ? 'white' : 'primary'
-                                                }>
-                                                    {message.username === user.username ? 'You' : message.username}
-                                                </Typography>
-                                                <Typography color={
-                                                    message.username === user.username ? 'white' : 'text.primary'
-                                                }>
-                                                    {message.text}
-                                                </Typography>
-                                            </>
-                                        )
-                                    }
-                                    secondary={
-                                        <Box>
-                                            <Typography
-                                                variant="caption"
-                                                color={message.username === user.username ? 'white' : 'text.secondary'}
-                                            >
-                                                {new Date(message.timestamp).toLocaleTimeString()}
-                                            </Typography>
-                                            {!message.system && (
-                                                <MessageReactions
-                                                    reactions={message.reactions || []}
-                                                    onAddReaction={(emoji) => {
-                                                        // Handle reaction
-                                                    }}
-                                                    onRemoveReaction={(emoji) => {
-                                                        // Handle removing reaction
-                                                    }}
-                                                    currentUserId={user.username}
-                                                />
-                                            )}
-                                        </Box>
-                                    }
-                                />
-                            </Paper>
-                        </MessageThread>
+                        />
                     ))}
+                    <div ref={messagesEndRef} />
                 </Box>
 
-                <Box sx={{ position: 'fixed', bottom: 0, right: showProfile ? 300 : 0, left: 0, p: 2, bgcolor: 'background.paper' }}>
-                    <TextField
-                        fullWidth
-                        value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
-                        placeholder="Type a message..."
-                        variant="outlined"
-                    />
+                {/* Message Input Area */}
+                <Box sx={{
+                    position: 'fixed',
+                    bottom: 0,
+                    right: showProfile ? 300 : 0,
+                    left: drawerWidth,
+                    p: 2,
+                    bgcolor: 'background.paper',
+                    borderTop: 1,
+                    borderColor: 'divider'
+                }}>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                        <IconButton onClick={() => setShowGifPicker(!showGifPicker)} title="Send GIF">
+                            <GifIcon />
+                        </IconButton>
+                        <IconButton onClick={() => setShowVoiceMessage(!showVoiceMessage)} title="Voice Message">
+                            <MicIcon />
+                        </IconButton>
+                        <IconButton onClick={() => setShowScheduler(!showScheduler)} title="Schedule Message">
+                            <ScheduleIcon />
+                        </IconButton>
+                        <IconButton onClick={() => setShowEmojiPicker(!showEmojiPicker)} title="Add Emoji">
+                            <EmojiIcon />
+                        </IconButton>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                            fullWidth
+                            value={messageInput}
+                            onChange={handleInputChange}
+                            placeholder="Type a message..."
+                            variant="outlined"
+                            size="small"
+                        />
+                        <IconButton
+                            color="primary"
+                            onClick={handleSendMessage}
+                            disabled={!messageInput.trim()}
+                        >
+                            <SendIcon />
+                        </IconButton>
+                    </Box>
                 </Box>
             </Box>
 
+            {/* Profile Panel */}
             <Box
                 sx={{
                     width: 300,
@@ -298,22 +340,10 @@ export default function Chat() {
                     borderLeft: 1,
                     borderColor: 'divider',
                     transition: 'right 0.3s ease-in-out',
-                    overflowY: 'auto'
+                    overflowY: 'auto',
+                    mt: 8 // Add margin top to account for AppBar
                 }}
             >
-                <IconButton
-                    onClick={() => setShowProfile(!showProfile)}
-                    sx={{
-                        position: 'absolute',
-                        left: -48,
-                        top: 8,
-                        bgcolor: 'background.paper',
-                        '&:hover': { bgcolor: 'action.hover' },
-                        zIndex: 1
-                    }}
-                >
-                    <PersonIcon />
-                </IconButton>
                 <UserProfile user={user} />
             </Box>
         </Box>
