@@ -48,7 +48,7 @@ export default function Chat() {
     const [messages, setMessages] = useState([]);
     const [messageInput, setMessageInput] = useState('');
     const [users, setUsers] = useState([]);
-    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [showProfile, setShowProfile] = useState(false);
     const [typingUsers, setTypingUsers] = useState([]);
     const [showGifPicker, setShowGifPicker] = useState(false);
     const [showVoiceMessage, setShowVoiceMessage] = useState(false);
@@ -183,268 +183,138 @@ export default function Chat() {
         }
     };
 
-    const drawer = (
-        <Box>
-            <Toolbar>
-                <Typography variant="h6" noWrap component="div">
-                    Online Users
-                </Typography>
-            </Toolbar>
-            <Divider />
-            <MUIList>
-                {users.map((username, index) => (
-                    <MUIListItem key={index}>
-                        <ListItemIcon>
-                            <PersonIcon />
-                        </ListItemIcon>
-                        <MUIListItemText primary={username} />
-                    </MUIListItem>
-                ))}
-            </MUIList>
-            <Divider />
-            <MUIList>
-                <MUIListItem button onClick={handleLogout}>
-                    <ListItemIcon>
-                        <LogoutIcon />
-                    </ListItemIcon>
-                    <MUIListItemText primary="Logout" />
-                </MUIListItem>
-            </MUIList>
-        </Box>
-    );
-
     return (
-        <Box sx={{ display: 'flex' }}>
-            <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-                <Toolbar>
-                    <IconButton
-                        color="inherit"
-                        edge="start"
-                        onClick={() => setDrawerOpen(!drawerOpen)}
-                        sx={{ mr: 2, display: { sm: 'none' } }}
-                    >
-                        <MenuIcon />
-                    </IconButton>
-                    <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-                        Chat Room
-                    </Typography>
-                    <UserProfile user={user} />
-                </Toolbar>
-            </AppBar>
-
-            <Drawer
-                variant="temporary"
-                open={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                sx={{
-                    display: { xs: 'block', sm: 'none' },
-                    '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-                }}
-            >
-                {drawer}
-            </Drawer>
-
-            <Drawer
-                variant="permanent"
-                sx={{
-                    display: { xs: 'none', sm: 'block' },
-                    '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-                }}
-                open
-            >
-                {drawer}
-            </Drawer>
-
+        <Box sx={{ display: 'flex', height: '100vh' }}>
             <Box
                 component="main"
                 sx={{
                     flexGrow: 1,
                     p: 3,
                     width: { sm: `calc(100% - ${drawerWidth}px)` },
-                    ml: { sm: `${drawerWidth}px` },
-                    mt: 8
+                    marginRight: showProfile ? '300px' : 0,
+                    transition: 'margin 0.3s ease-in-out'
                 }}
             >
-                <Paper
-                    elevation={3}
-                    sx={{
-                        height: 'calc(100vh - 100px)',
-                        display: 'flex',
-                        flexDirection: 'column'
-                    }}
-                >
-                    <List sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-                        {messages.map((message, index) => (
-                            <MessageThread
-                                key={index}
-                                message={{
-                                    ...message,
-                                    id: index,
-                                    user: {
-                                        id: message.username,
-                                        username: message.username,
-                                        avatar: null
-                                    }
-                                }}
-                                replies={[]}
-                                onReply={(reply) => {
-                                    if (socket) {
-                                        socket.emit('message', `@${message.username} ${reply.text}`);
-                                    }
+                <Box sx={{ height: 'calc(100vh - 140px)', overflow: 'auto', mb: 2 }}>
+                    {messages.map((message, index) => (
+                        <MessageThread
+                            key={index}
+                            message={{
+                                ...message,
+                                id: index,
+                                user: {
+                                    id: message.username,
+                                    username: message.username,
+                                    avatar: null
+                                }
+                            }}
+                            replies={[]}
+                            onReply={(reply) => {
+                                if (socket) {
+                                    socket.emit('message', `@${message.username} ${reply.text}`);
+                                }
+                            }}
+                        >
+                            <Paper
+                                elevation={1}
+                                sx={{
+                                    p: 1,
+                                    maxWidth: '70%',
+                                    bgcolor: message.system
+                                        ? 'grey.100'
+                                        : message.username === user.username
+                                            ? 'primary.light'
+                                            : 'background.paper'
                                 }}
                             >
-                                <Paper
-                                    elevation={1}
-                                    sx={{
-                                        p: 1,
-                                        maxWidth: '70%',
-                                        bgcolor: message.system
-                                            ? 'grey.100'
-                                            : message.username === user.username
-                                                ? 'primary.light'
-                                                : 'background.paper'
-                                    }}
-                                >
-                                    <ListItemText
-                                        primary={
-                                            message.system ? (
-                                                <Typography variant="body2" color="text.secondary">
+                                <ListItemText
+                                    primary={
+                                        message.system ? (
+                                            <Typography variant="body2" color="text.secondary">
+                                                {message.text}
+                                            </Typography>
+                                        ) : (
+                                            <>
+                                                <Typography variant="subtitle2" color={
+                                                    message.username === user.username ? 'white' : 'primary'
+                                                }>
+                                                    {message.username === user.username ? 'You' : message.username}
+                                                </Typography>
+                                                <Typography color={
+                                                    message.username === user.username ? 'white' : 'text.primary'
+                                                }>
                                                     {message.text}
                                                 </Typography>
-                                            ) : (
-                                                <>
-                                                    <Typography variant="subtitle2" color={
-                                                        message.username === user.username ? 'white' : 'primary'
-                                                    }>
-                                                        {message.username === user.username ? 'You' : message.username}
-                                                    </Typography>
-                                                    <Typography color={
-                                                        message.username === user.username ? 'white' : 'text.primary'
-                                                    }>
-                                                        {message.text}
-                                                    </Typography>
-                                                </>
-                                            )
-                                        }
-                                        secondary={
-                                            <Box>
-                                                <Typography
-                                                    variant="caption"
-                                                    color={message.username === user.username ? 'white' : 'text.secondary'}
-                                                >
-                                                    {new Date(message.timestamp).toLocaleTimeString()}
-                                                </Typography>
-                                                {!message.system && (
-                                                    <MessageReactions
-                                                        reactions={message.reactions || []}
-                                                        onAddReaction={(emoji) => {
-                                                            // Handle reaction
-                                                        }}
-                                                        onRemoveReaction={(emoji) => {
-                                                            // Handle removing reaction
-                                                        }}
-                                                        currentUserId={user.username}
-                                                    />
-                                                )}
-                                            </Box>
-                                        }
-                                    />
-                                </Paper>
-                            </MessageThread>
-                        ))}
-                        <div ref={messagesEndRef} />
-                    </List>
-
-                    {typingUsers.length > 0 && (
-                        <TypingIndicator users={typingUsers} />
-                    )}
-
-                    <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
-                        {showVoiceMessage && (
-                            <Box sx={{ mb: 2 }}>
-                                <VoiceMessage
-                                    onSend={handleVoiceMessage}
-                                    onClose={() => setShowVoiceMessage(false)}
+                                            </>
+                                        )
+                                    }
+                                    secondary={
+                                        <Box>
+                                            <Typography
+                                                variant="caption"
+                                                color={message.username === user.username ? 'white' : 'text.secondary'}
+                                            >
+                                                {new Date(message.timestamp).toLocaleTimeString()}
+                                            </Typography>
+                                            {!message.system && (
+                                                <MessageReactions
+                                                    reactions={message.reactions || []}
+                                                    onAddReaction={(emoji) => {
+                                                        // Handle reaction
+                                                    }}
+                                                    onRemoveReaction={(emoji) => {
+                                                        // Handle removing reaction
+                                                    }}
+                                                    currentUserId={user.username}
+                                                />
+                                            )}
+                                        </Box>
+                                    }
                                 />
-                            </Box>
-                        )}
+                            </Paper>
+                        </MessageThread>
+                    ))}
+                </Box>
 
-                        {showScheduler && (
-                            <Box sx={{ mb: 2 }}>
-                                <MessageScheduler
-                                    scheduledMessages={scheduledMessages}
-                                    onSchedule={handleScheduleMessage}
-                                    onClose={() => setShowScheduler(false)}
-                                    onEdit={(message) => {
-                                        // Handle edit
-                                    }}
-                                    onDelete={(id) => {
-                                        setScheduledMessages(prev => prev.filter(msg => msg.id !== id));
-                                    }}
-                                />
-                            </Box>
-                        )}
+                <Box sx={{ position: 'fixed', bottom: 0, right: showProfile ? 300 : 0, left: 0, p: 2, bgcolor: 'background.paper' }}>
+                    <TextField
+                        fullWidth
+                        value={messageInput}
+                        onChange={(e) => setMessageInput(e.target.value)}
+                        placeholder="Type a message..."
+                        variant="outlined"
+                    />
+                </Box>
+            </Box>
 
-                        {showGifPicker && (
-                            <Box sx={{ mb: 2 }}>
-                                <GifPicker
-                                    onSelect={handleGifSelect}
-                                    onClose={() => setShowGifPicker(false)}
-                                />
-                            </Box>
-                        )}
-
-                        <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
-                            <IconButton
-                                color="primary"
-                                onClick={() => setShowGifPicker(!showGifPicker)}
-                                title="Send GIF"
-                            >
-                                <GifIcon />
-                            </IconButton>
-                            <IconButton
-                                color="primary"
-                                onClick={() => setShowVoiceMessage(true)}
-                                title="Record Voice Message"
-                            >
-                                <MicIcon />
-                            </IconButton>
-                            <IconButton
-                                color="primary"
-                                onClick={() => setShowScheduler(true)}
-                                title="Schedule Message"
-                            >
-                                <ScheduleIcon />
-                            </IconButton>
-                            <IconButton
-                                color="primary"
-                                onClick={() => setShowEmojiPicker(true)}
-                                title="Add Emoji"
-                            >
-                                <EmojiIcon />
-                            </IconButton>
-                        </Box>
-
-                        <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
-                            <TextField
-                                fullWidth
-                                value={messageInput}
-                                onChange={handleInputChange}
-                                placeholder="Type a message..."
-                                variant="outlined"
-                                size="small"
-                            />
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                color="primary"
-                                endIcon={<SendIcon />}
-                            >
-                                Send
-                            </Button>
-                        </form>
-                    </Box>
-                </Paper>
+            <Box
+                sx={{
+                    width: 300,
+                    position: 'fixed',
+                    right: showProfile ? 0 : -300,
+                    top: 0,
+                    height: '100vh',
+                    bgcolor: 'background.paper',
+                    borderLeft: 1,
+                    borderColor: 'divider',
+                    transition: 'right 0.3s ease-in-out',
+                    overflowY: 'auto'
+                }}
+            >
+                <IconButton
+                    onClick={() => setShowProfile(!showProfile)}
+                    sx={{
+                        position: 'absolute',
+                        left: -48,
+                        top: 8,
+                        bgcolor: 'background.paper',
+                        '&:hover': { bgcolor: 'action.hover' },
+                        zIndex: 1
+                    }}
+                >
+                    <PersonIcon />
+                </IconButton>
+                <UserProfile user={user} />
             </Box>
         </Box>
     );
