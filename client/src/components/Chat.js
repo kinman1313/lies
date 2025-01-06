@@ -62,6 +62,10 @@ export default function Chat() {
     const [drawerOpen, setDrawerOpen] = useState(window.innerWidth >= 600);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 600);
 
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
     useEffect(() => {
         const handleResize = () => {
             const mobile = window.innerWidth < 600;
