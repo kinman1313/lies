@@ -20,7 +20,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
     const [isRecording, setIsRecording] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
     const [duration, setDuration] = useState(0);
     const [audioUrl, setAudioUrl] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -39,6 +38,10 @@ const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
             }
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
+            }
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.src = '';
             }
         };
     }, [audioUrl]);
@@ -69,10 +72,9 @@ const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
             mediaRecorderRef.current.start();
             startTimeRef.current = Date.now();
             setIsRecording(true);
-            setIsPaused(false);
 
             const updateDuration = () => {
-                if (isRecording && !isPaused) {
+                if (isRecording) {
                     const elapsed = (Date.now() - startTimeRef.current) / 1000;
                     setDuration(elapsed);
                     if (elapsed < maxDuration) {
@@ -93,7 +95,6 @@ const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
             setIsRecording(false);
-            setIsPaused(false);
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
@@ -113,21 +114,33 @@ const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
     const handleSend = () => {
         if (audioUrl) {
             onSend(audioUrl);
-            setAudioUrl(null);
-            setDuration(0);
-            setCurrentTime(0);
-            onClose();
         }
     };
 
     useEffect(() => {
-        audioRef.current.onended = () => {
+        const audio = audioRef.current;
+
+        const handleLoadedMetadata = () => {
+            setDuration(audio.duration);
+        };
+
+        const handleTimeUpdate = () => {
+            setCurrentTime(audio.currentTime);
+        };
+
+        const handleEnded = () => {
             setIsPlaying(false);
             setCurrentTime(0);
         };
 
-        audioRef.current.ontimeupdate = () => {
-            setCurrentTime(audioRef.current.currentTime);
+        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.addEventListener('timeupdate', handleTimeUpdate);
+        audio.addEventListener('ended', handleEnded);
+
+        return () => {
+            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            audio.removeEventListener('timeupdate', handleTimeUpdate);
+            audio.removeEventListener('ended', handleEnded);
         };
     }, []);
 
@@ -185,18 +198,23 @@ const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
                                     </IconButton>
                                     <Box sx={{ width: 200 }}>
                                         <Slider
-                                            value={isPlaying ? currentTime : 0}
+                                            value={currentTime}
                                             max={duration}
                                             onChange={(_, value) => {
                                                 audioRef.current.currentTime = value;
                                                 setCurrentTime(value);
                                             }}
+                                            size="small"
                                         />
                                     </Box>
                                     <Typography variant="caption">
                                         {formatTime(currentTime)} / {formatTime(duration)}
                                     </Typography>
-                                    <IconButton color="error" onClick={() => setAudioUrl(null)}>
+                                    <IconButton color="error" onClick={() => {
+                                        setAudioUrl(null);
+                                        setDuration(0);
+                                        setCurrentTime(0);
+                                    }}>
                                         <DeleteIcon />
                                     </IconButton>
                                     <IconButton color="primary" onClick={handleSend}>

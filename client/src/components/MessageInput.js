@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     Box,
     TextField,
@@ -6,7 +6,8 @@ import {
     Tooltip,
     SpeedDial,
     SpeedDialIcon,
-    SpeedDialAction
+    SpeedDialAction,
+    Popover
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -26,162 +27,108 @@ import Picker from '@emoji-mart/react';
 const MessageInput = ({ onSendMessage }) => {
     const [message, setMessage] = useState('');
     const [showVoiceMessage, setShowVoiceMessage] = useState(false);
-    const [showGifPicker, setShowGifPicker] = useState(false);
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [showFileUpload, setShowFileUpload] = useState(false);
-    const [showScheduler, setShowScheduler] = useState(false);
-    const [speedDialOpen, setSpeedDialOpen] = useState(false);
+    const [gifAnchorEl, setGifAnchorEl] = useState(null);
+    const inputRef = useRef(null);
 
-    const handleSend = (e) => {
-        e?.preventDefault();
+    const handleSubmit = (e) => {
+        e.preventDefault();
         if (message.trim()) {
-            onSendMessage(message);
+            onSendMessage({
+                type: 'text',
+                content: message.trim()
+            });
             setMessage('');
         }
     };
 
-    const handleKeyPress = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    };
-
-    const handleEmojiSelect = (emoji) => {
-        setMessage(prev => prev + emoji.native);
-        setShowEmojiPicker(false);
-    };
-
     const handleGifSelect = (gif) => {
-        onSendMessage(`[GIF] ${gif.url}`);
-        setShowGifPicker(false);
+        onSendMessage({
+            type: 'gif',
+            content: gif.url,
+            metadata: {
+                width: gif.width,
+                height: gif.height,
+                title: gif.title
+            }
+        });
+        setGifAnchorEl(null);
     };
 
     const handleVoiceMessageSend = (audioUrl) => {
-        onSendMessage(`[VOICE] ${audioUrl}`);
+        onSendMessage({
+            type: 'voice',
+            content: audioUrl,
+            metadata: {
+                duration: audioRef?.current?.duration || 0
+            }
+        });
         setShowVoiceMessage(false);
     };
 
-    const handleFileUpload = (fileUrl) => {
-        onSendMessage(`[FILE] ${fileUrl}`);
-        setShowFileUpload(false);
-    };
-
-    const handleScheduleMessage = (scheduledMessage, scheduledTime) => {
-        // Handle scheduled message
-        setShowScheduler(false);
-    };
-
-    const actions = [
-        { icon: <MicIcon />, name: 'Voice', onClick: () => setShowVoiceMessage(true) },
-        { icon: <GifIcon />, name: 'GIF', onClick: () => setShowGifPicker(true) },
-        { icon: <EmojiIcon />, name: 'Emoji', onClick: () => setShowEmojiPicker(true) },
-        { icon: <AttachFileIcon />, name: 'File', onClick: () => setShowFileUpload(true) },
-        { icon: <ScheduleIcon />, name: 'Schedule', onClick: () => setShowScheduler(true) }
-    ];
-
     return (
-        <Box sx={{ position: 'relative' }}>
+        <Box sx={{ p: 2, backgroundColor: 'background.paper' }}>
             {showVoiceMessage && (
-                <VoiceMessage
-                    onSend={handleVoiceMessageSend}
-                    onClose={() => setShowVoiceMessage(false)}
-                />
-            )}
-
-            {showGifPicker && (
-                <GifPicker
-                    onSelect={handleGifSelect}
-                    onClose={() => setShowGifPicker(false)}
-                />
-            )}
-
-            {showFileUpload && (
-                <FileUpload
-                    onUpload={handleFileUpload}
-                    onClose={() => setShowFileUpload(false)}
-                />
-            )}
-
-            {showScheduler && (
-                <MessageScheduler
-                    message={message}
-                    onSchedule={handleScheduleMessage}
-                    onClose={() => setShowScheduler(false)}
-                />
-            )}
-
-            {showEmojiPicker && (
-                <Box sx={{
-                    position: 'absolute',
-                    bottom: '100%',
-                    right: 0,
-                    zIndex: 1
-                }}>
-                    <Picker
-                        data={data}
-                        onEmojiSelect={handleEmojiSelect}
-                        theme="light"
+                <Box sx={{ position: 'absolute', bottom: '100%', left: 0, right: 0, p: 2 }}>
+                    <VoiceMessage
+                        onSend={handleVoiceMessageSend}
+                        onClose={() => setShowVoiceMessage(false)}
                     />
                 </Box>
             )}
 
-            <Box
-                component="form"
-                onSubmit={handleSend}
-                sx={{
-                    p: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    borderTop: 1,
-                    borderColor: 'divider'
-                }}
-            >
-                <SpeedDial
-                    ariaLabel="Message options"
-                    sx={{
-                        position: 'absolute',
-                        bottom: 70,
-                        right: 16
-                    }}
-                    icon={<SpeedDialIcon />}
-                    onClose={() => setSpeedDialOpen(false)}
-                    onOpen={() => setSpeedDialOpen(true)}
-                    open={speedDialOpen}
-                    direction="up"
-                >
-                    {actions.map((action) => (
-                        <SpeedDialAction
-                            key={action.name}
-                            icon={action.icon}
-                            tooltipTitle={action.name}
-                            onClick={action.onClick}
-                        />
-                    ))}
-                </SpeedDial>
-
+            <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8 }}>
                 <TextField
                     fullWidth
                     multiline
                     maxRows={4}
-                    placeholder="Type a message..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    sx={{ flex: 1 }}
+                    placeholder="Type a message..."
+                    ref={inputRef}
+                    sx={{
+                        '& .MuiOutlinedInput-root': {
+                            borderRadius: 2
+                        }
+                    }}
                 />
+                <IconButton
+                    color="primary"
+                    onClick={() => setShowVoiceMessage(true)}
+                >
+                    <MicIcon />
+                </IconButton>
+                <IconButton
+                    color="primary"
+                    onClick={(e) => setGifAnchorEl(e.currentTarget)}
+                >
+                    <GifIcon />
+                </IconButton>
+                <IconButton type="submit" color="primary" disabled={!message.trim()}>
+                    <SendIcon />
+                </IconButton>
+            </form>
 
-                <Tooltip title="Send">
-                    <IconButton
-                        color="primary"
-                        onClick={handleSend}
-                        disabled={!message.trim()}
-                    >
-                        <SendIcon />
-                    </IconButton>
-                </Tooltip>
-            </Box>
+            <Popover
+                open={Boolean(gifAnchorEl)}
+                anchorEl={gifAnchorEl}
+                onClose={() => setGifAnchorEl(null)}
+                anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'center',
+                }}
+                transformOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'center',
+                }}
+                sx={{
+                    mt: -2
+                }}
+            >
+                <GifPicker
+                    onSelect={handleGifSelect}
+                    onClose={() => setGifAnchorEl(null)}
+                />
+            </Popover>
         </Box>
     );
 };

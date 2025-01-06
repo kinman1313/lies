@@ -42,9 +42,8 @@ const MessageBubble = ({ message, isOwn }) => {
             audioRef.current.pause();
             setIsPlaying(false);
         } else {
-            if (message.text.startsWith('[VOICE]')) {
-                const audioUrl = message.text.replace('[VOICE] blob:', '');
-                audioRef.current.src = audioUrl;
+            if (message.type === 'voice') {
+                audioRef.current.src = message.content;
                 audioRef.current.play().catch(error => {
                     console.error('Error playing audio:', error);
                 });
@@ -54,9 +53,8 @@ const MessageBubble = ({ message, isOwn }) => {
     };
 
     React.useEffect(() => {
-        if (message.text.startsWith('[VOICE]')) {
-            const audioUrl = message.text.replace('[VOICE] blob:', '');
-            audioRef.current.src = audioUrl;
+        if (message.type === 'voice') {
+            audioRef.current.src = message.content;
 
             const handleLoadedMetadata = () => {
                 setDuration(audioRef.current.duration);
@@ -83,7 +81,7 @@ const MessageBubble = ({ message, isOwn }) => {
                 audioRef.current.src = '';
             };
         }
-    }, [message.text]);
+    }, [message.content, message.type]);
 
     return (
         <motion.div
@@ -111,7 +109,7 @@ const MessageBubble = ({ message, isOwn }) => {
                     overflow: 'hidden'
                 }}
             >
-                {message.text?.startsWith('[GIF]') ? (
+                {message.type === 'gif' ? (
                     <Box
                         sx={{
                             position: 'relative',
@@ -125,7 +123,7 @@ const MessageBubble = ({ message, isOwn }) => {
                     >
                         <Box
                             component="img"
-                            src={message.text.replace('[GIF] ', '')}
+                            src={message.content}
                             alt="GIF"
                             loading="lazy"
                             sx={{
@@ -167,7 +165,7 @@ const MessageBubble = ({ message, isOwn }) => {
                             </Typography>
                         </Box>
                     </Box>
-                ) : message.text?.startsWith('[VOICE]') ? (
+                ) : message.type === 'voice' ? (
                     <Box sx={{
                         display: 'flex',
                         alignItems: 'center',
@@ -222,7 +220,7 @@ const MessageBubble = ({ message, isOwn }) => {
                     </Box>
                 ) : (
                     <Typography variant="body1">
-                        {message.text}
+                        {message.content}
                     </Typography>
                 )}
             </Paper>
