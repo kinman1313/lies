@@ -294,6 +294,12 @@ export default function Chat() {
                     borderTop: 1,
                     borderColor: 'divider'
                 }}>
+                    {typingUsers.length > 0 && (
+                        <Box sx={{ mb: 1 }}>
+                            <TypingIndicator users={typingUsers} />
+                        </Box>
+                    )}
+
                     <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
                         <IconButton onClick={() => setShowGifPicker(!showGifPicker)} title="Send GIF">
                             <GifIcon />

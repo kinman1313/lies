@@ -26,6 +26,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import MessageBubble from './MessageBubble';
 
 const MessageThread = ({
     message,
@@ -92,9 +93,10 @@ const MessageThread = ({
                                 {message?.timestamp ? formatTimestamp(message.timestamp) : 'Unknown time'}
                             </Typography>
                         </Box>
-                        <Typography variant="body1">
-                            {message?.text || ''}
-                        </Typography>
+                        <MessageBubble
+                            message={message}
+                            isOwn={message?.user?.id === currentUser?.id}
+                        />
                         <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                             <Button
                                 size="small"
