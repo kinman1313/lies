@@ -1,113 +1,92 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Paper,
-    Avatar,
-    Typography,
-    Button,
-    IconButton,
-    TextField,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    Chip,
+    Button,
+    TextField,
+    Avatar,
+    Box,
+    Typography,
+    Switch,
+    FormControlLabel,
+    Select,
+    MenuItem,
+    FormControl,
+    InputLabel,
     Divider,
+    IconButton,
     List,
     ListItem,
     ListItemIcon,
     ListItemText,
-    ListItemButton,
-    Tab,
-    Tabs,
-    Badge,
-    Switch,
-    FormControlLabel,
-    Tooltip
+    Badge
 } from '@mui/material';
 import {
     Edit as EditIcon,
-    GitHub as GitHubIcon,
-    Twitter as TwitterIcon,
-    LinkedIn as LinkedInIcon,
-    Language as WebsiteIcon,
-    AccessTime as TimeIcon,
-    Translate as TranslateIcon,
     Palette as PaletteIcon,
-    Notifications as NotificationsIcon,
-    Lock as LockIcon,
-    EmojiEmotions as EmojiIcon
+    EmojiEmotions as EmojiIcon,
+    Notifications as NotificationsIcon
 } from '@mui/icons-material';
-import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 
-const UserProfile = ({
-    user = {},
-    onUpdateProfile,
-    onUpdatePreferences,
-    onUpdateAvatar
-}) => {
-    const { user: currentUser } = useAuth();
-    const [editMode, setEditMode] = useState(false);
-    const [activeTab, setActiveTab] = useState(0);
-    const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+const NOTIFICATION_SOUNDS = {
+    default: '/sounds/notification-default.mp3',
+    chime: '/sounds/notification-chime.mp3',
+    ding: '/sounds/notification-ding.mp3',
+    pop: '/sounds/notification-pop.mp3'
+};
+
+const UserProfile = ({ open, onClose }) => {
+    const { user, updateProfile } = useAuth();
+    const [username, setUsername] = useState(user?.username || '');
+    const [avatar, setAvatar] = useState(user?.avatar || '');
     const [newAvatar, setNewAvatar] = useState(null);
+    const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+    const [notificationsEnabled, setNotificationsEnabled] = useState(
+        localStorage.getItem('notificationsEnabled') === 'true'
+    );
+    const [soundEnabled, setSoundEnabled] = useState(
+        localStorage.getItem('soundEnabled') === 'true'
+    );
+    const [notificationSound, setNotificationSound] = useState(
+        localStorage.getItem('notificationSound') || 'default'
+    );
     const [preferences, setPreferences] = useState({
         theme: user?.preferences?.theme || 'light',
-        language: user?.preferences?.language || 'en',
-        notifications: user?.preferences?.notifications || true,
-        messageColor: user?.preferences?.messageColor || '#7C4DFF',
-        bubbleStyle: user?.preferences?.bubbleStyle || 'modern'
-    });
-    const [profile, setProfile] = useState({
-        bio: user?.profile?.bio || '',
-        location: user?.profile?.location || '',
-        github: user?.profile?.github || '',
-        twitter: user?.profile?.twitter || '',
-        linkedin: user?.profile?.linkedin || '',
-        website: user?.profile?.website || ''
+        bubbleStyle: user?.preferences?.bubbleStyle || 'modern',
+        messageColor: user?.preferences?.messageColor || '#7C4DFF'
     });
 
     useEffect(() => {
         if (user) {
+            setUsername(user.username);
+            setAvatar(user.avatar);
             setPreferences({
-                theme: user?.preferences?.theme || 'light',
-                language: user?.preferences?.language || 'en',
-                notifications: user?.preferences?.notifications || true,
-                messageColor: user?.preferences?.messageColor || '#7C4DFF',
-                bubbleStyle: user?.preferences?.bubbleStyle || 'modern'
-            });
-            setProfile({
-                bio: user?.profile?.bio || '',
-                location: user?.profile?.location || '',
-                github: user?.profile?.github || '',
-                twitter: user?.profile?.twitter || '',
-                linkedin: user?.profile?.linkedin || '',
-                website: user?.profile?.website || ''
+                theme: user.preferences?.theme || 'light',
+                bubbleStyle: user.preferences?.bubbleStyle || 'modern',
+                messageColor: user.preferences?.messageColor || '#7C4DFF'
             });
         }
     }, [user]);
 
-    useEffect(() => {
-        if (user?.preferences) {
-            setPreferences({
-                theme: user.preferences.theme || 'light',
-                language: user.preferences.language || 'en',
-                notifications: user.preferences.notifications || true,
-                messageColor: user.preferences.messageColor || '#7C4DFF',
-                bubbleStyle: user.preferences.bubbleStyle || 'modern'
+    const handleSave = async () => {
+        try {
+            await updateProfile({
+                username,
+                avatar: newAvatar || avatar,
+                preferences
             });
-        }
-    }, [user]);
 
-    const handleSaveProfile = () => {
-        onUpdateProfile(profile);
-        setEditMode(false);
-    };
+            // Save notification preferences
+            localStorage.setItem('notificationsEnabled', notificationsEnabled);
+            localStorage.setItem('soundEnabled', soundEnabled);
+            localStorage.setItem('notificationSound', notificationSound);
 
-    const handleSavePreferences = (newPreferences) => {
-        if (onUpdatePreferences) {
-            onUpdatePreferences(newPreferences || preferences);
+            onClose();
+        } catch (error) {
+            console.error('Error updating profile:', error);
         }
     };
 
@@ -122,21 +101,9 @@ const UserProfile = ({
         }
     };
 
-    const handleSaveAvatar = async () => {
-        if (newAvatar && onUpdateAvatar) {
-            try {
-                await onUpdateAvatar(newAvatar);
-                // Update the local avatar preview immediately
-                user.profile = {
-                    ...user.profile,
-                    avatar: { url: newAvatar }
-                };
-                setAvatarDialogOpen(false);
-                setNewAvatar(null);
-            } catch (error) {
-                console.error('Error updating avatar:', error);
-            }
-        }
+    const playSound = (sound) => {
+        const audio = new Audio(NOTIFICATION_SOUNDS[sound]);
+        audio.play();
     };
 
     const handleColorChange = (event) => {
@@ -145,287 +112,63 @@ const UserProfile = ({
             ...prev,
             messageColor: newColor
         }));
-        // Save the color change immediately
-        handleSavePreferences({
-            ...preferences,
-            messageColor: newColor
-        });
     };
 
-    // Add Avatar Dialog
-    const renderAvatarDialog = () => (
-        <Dialog open={avatarDialogOpen} onClose={() => setAvatarDialogOpen(false)}>
-            <DialogTitle>Update Profile Picture</DialogTitle>
-            <DialogContent>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, p: 2 }}>
-                    <Avatar
-                        src={newAvatar || user?.profile?.avatar?.url}
-                        sx={{ width: 150, height: 150 }}
-                    >
-                        {user?.username ? user.username[0].toUpperCase() : '?'}
-                    </Avatar>
-                    <Button
-                        variant="contained"
-                        component="label"
-                    >
-                        Choose File
-                        <input
-                            type="file"
-                            hidden
-                            accept="image/*"
-                            onChange={handleAvatarChange}
-                        />
-                    </Button>
-                </Box>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={() => setAvatarDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleSaveAvatar} variant="contained" disabled={!newAvatar}>
-                    Save
-                </Button>
-            </DialogActions>
-        </Dialog>
-    );
-
     return (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {renderAvatarDialog()}
-            <Paper
-                elevation={0}
-                sx={{
-                    p: 3,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    bgcolor: 'background.default'
-                }}
-            >
-                <Badge
-                    overlap="circular"
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    badgeContent={
-                        <IconButton
-                            size="small"
-                            onClick={() => setAvatarDialogOpen(true)}
-                            sx={{
-                                bgcolor: 'background.paper',
-                                boxShadow: 1,
-                                '&:hover': { bgcolor: 'background.paper' }
-                            }}
-                        >
-                            <EditIcon fontSize="small" />
-                        </IconButton>
-                    }
-                >
-                    <Avatar
-                        src={user?.profile?.avatar?.url}
-                        sx={{ width: 100, height: 100, mb: 2 }}
-                    >
-                        {user?.username ? user.username[0].toUpperCase() : '?'}
-                    </Avatar>
-                </Badge>
-
-                <Typography variant="h5" gutterBottom>
-                    {user?.username || 'User'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {user?.email || 'No email provided'}
-                </Typography>
-
-                {!editMode && profile.bio && (
-                    <Typography variant="body1" align="center" sx={{ mt: 1 }}>
-                        {profile.bio}
-                    </Typography>
-                )}
-
-                <Button
-                    startIcon={editMode ? null : <EditIcon />}
-                    onClick={() => setEditMode(!editMode)}
-                    sx={{ mt: 2 }}
-                >
-                    {editMode ? 'Cancel Editing' : 'Edit Profile'}
-                </Button>
-            </Paper>
-
-            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs
-                    value={activeTab}
-                    onChange={(_, newValue) => setActiveTab(newValue)}
-                    variant="fullWidth"
-                >
-                    <Tab label="Profile" />
-                    <Tab label="Preferences" />
-                </Tabs>
-            </Box>
-
-            <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-                {activeTab === 0 && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        {editMode ? (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <TextField
-                                    fullWidth
-                                    multiline
-                                    rows={3}
-                                    label="Bio"
-                                    value={profile.bio}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, bio: e.target.value }))}
-                                />
-                                <TextField
-                                    fullWidth
-                                    label="Location"
-                                    value={profile.location}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, location: e.target.value }))}
-                                />
-                                <TextField
-                                    fullWidth
-                                    label="GitHub"
-                                    value={profile.github}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, github: e.target.value }))}
-                                    InputProps={{
-                                        startAdornment: <GitHubIcon sx={{ mr: 1 }} />
-                                    }}
-                                />
-                                <TextField
-                                    fullWidth
-                                    label="Twitter"
-                                    value={profile.twitter}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, twitter: e.target.value }))}
-                                    InputProps={{
-                                        startAdornment: <TwitterIcon sx={{ mr: 1 }} />
-                                    }}
-                                />
-                                <TextField
-                                    fullWidth
-                                    label="LinkedIn"
-                                    value={profile.linkedin}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, linkedin: e.target.value }))}
-                                    InputProps={{
-                                        startAdornment: <LinkedInIcon sx={{ mr: 1 }} />
-                                    }}
-                                />
-                                <TextField
-                                    fullWidth
-                                    label="Website"
-                                    value={profile.website}
-                                    onChange={(e) => setProfile(prev => ({ ...prev, website: e.target.value }))}
-                                    InputProps={{
-                                        startAdornment: <WebsiteIcon sx={{ mr: 1 }} />
-                                    }}
-                                />
-                                <Button
-                                    variant="contained"
-                                    onClick={handleSaveProfile}
-                                    sx={{ mt: 2 }}
-                                >
-                                    Save Changes
-                                </Button>
-                            </Box>
-                        ) : (
-                            <List>
-                                {profile.location && (
-                                    <ListItem>
-                                        <ListItemIcon>
-                                            <TimeIcon />
-                                        </ListItemIcon>
-                                        <ListItemText primary="Location" secondary={profile.location} />
-                                    </ListItem>
-                                )}
-                                {Object.entries({
-                                    github: [profile.github, GitHubIcon],
-                                    twitter: [profile.twitter, TwitterIcon],
-                                    linkedin: [profile.linkedin, LinkedInIcon],
-                                    website: [profile.website, WebsiteIcon]
-                                }).map(([key, [value, Icon]]) => value && (
-                                    <ListItemButton
-                                        key={key}
-                                        component="a"
-                                        href={value}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle>Profile Settings</DialogTitle>
+            <DialogContent>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
+                    {/* Profile Section */}
+                    <Box>
+                        <Typography variant="h6" gutterBottom>Profile</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                            <Badge
+                                overlap="circular"
+                                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                badgeContent={
+                                    <IconButton
+                                        size="small"
+                                        component="label"
+                                        sx={{
+                                            bgcolor: 'background.paper',
+                                            boxShadow: 1,
+                                            '&:hover': { bgcolor: 'background.paper' }
+                                        }}
                                     >
-                                        <ListItemIcon>
-                                            <Icon />
-                                        </ListItemIcon>
-                                        <ListItemText primary={key.charAt(0).toUpperCase() + key.slice(1)} secondary={value} />
-                                    </ListItemButton>
-                                ))}
-                            </List>
-                        )}
-                    </motion.div>
-                )}
+                                        <EditIcon fontSize="small" />
+                                        <input
+                                            type="file"
+                                            hidden
+                                            accept="image/*"
+                                            onChange={handleAvatarChange}
+                                        />
+                                    </IconButton>
+                                }
+                            >
+                                <Avatar
+                                    src={newAvatar || avatar}
+                                    alt={username}
+                                    sx={{ width: 80, height: 80 }}
+                                >
+                                    {username ? username[0].toUpperCase() : '?'}
+                                </Avatar>
+                            </Badge>
+                            <TextField
+                                label="Username"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                fullWidth
+                            />
+                        </Box>
+                    </Box>
 
-                {activeTab === 1 && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.2 }}
-                    >
+                    <Divider />
+
+                    {/* Appearance Settings */}
+                    <Box>
+                        <Typography variant="h6" gutterBottom>Appearance</Typography>
                         <List>
-                            <ListItem>
-                                <ListItemIcon>
-                                    <PaletteIcon />
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary="Theme"
-                                    secondary="Choose your preferred theme"
-                                />
-                                <TextField
-                                    select
-                                    size="small"
-                                    value={preferences.theme}
-                                    onChange={(e) => setPreferences(prev => ({ ...prev, theme: e.target.value }))}
-                                    SelectProps={{
-                                        native: true
-                                    }}
-                                >
-                                    <option value="light">Light</option>
-                                    <option value="dark">Dark</option>
-                                    <option value="system">System</option>
-                                </TextField>
-                            </ListItem>
-
-                            <ListItem>
-                                <ListItemIcon>
-                                    <TranslateIcon />
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary="Language"
-                                    secondary="Select your preferred language"
-                                />
-                                <TextField
-                                    select
-                                    size="small"
-                                    value={preferences.language}
-                                    onChange={(e) => setPreferences(prev => ({ ...prev, language: e.target.value }))}
-                                    SelectProps={{
-                                        native: true
-                                    }}
-                                >
-                                    <option value="en">English</option>
-                                    <option value="es">Spanish</option>
-                                    <option value="fr">French</option>
-                                </TextField>
-                            </ListItem>
-
-                            <ListItem>
-                                <ListItemIcon>
-                                    <NotificationsIcon />
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary="Notifications"
-                                    secondary="Enable or disable notifications"
-                                />
-                                <Switch
-                                    checked={preferences.notifications}
-                                    onChange={(e) => setPreferences(prev => ({ ...prev, notifications: e.target.checked }))}
-                                />
-                            </ListItem>
-
                             <ListItem>
                                 <ListItemIcon>
                                     <EmojiIcon />
@@ -434,19 +177,15 @@ const UserProfile = ({
                                     primary="Message Style"
                                     secondary="Customize your message appearance"
                                 />
-                                <TextField
-                                    select
+                                <Select
                                     size="small"
                                     value={preferences.bubbleStyle}
                                     onChange={(e) => setPreferences(prev => ({ ...prev, bubbleStyle: e.target.value }))}
-                                    SelectProps={{
-                                        native: true
-                                    }}
                                 >
-                                    <option value="modern">Modern</option>
-                                    <option value="classic">Classic</option>
-                                    <option value="minimal">Minimal</option>
-                                </TextField>
+                                    <MenuItem value="modern">Modern</MenuItem>
+                                    <MenuItem value="classic">Classic</MenuItem>
+                                    <MenuItem value="minimal">Minimal</MenuItem>
+                                </Select>
                             </ListItem>
 
                             <ListItem>
@@ -465,20 +204,60 @@ const UserProfile = ({
                                 />
                             </ListItem>
                         </List>
+                    </Box>
 
-                        <Box sx={{ p: 2 }}>
-                            <Button
-                                fullWidth
-                                variant="contained"
-                                onClick={handleSavePreferences}
-                            >
-                                Save Preferences
-                            </Button>
+                    <Divider />
+
+                    {/* Notification Settings */}
+                    <Box>
+                        <Typography variant="h6" gutterBottom>Notifications</Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={notificationsEnabled}
+                                        onChange={(e) => setNotificationsEnabled(e.target.checked)}
+                                    />
+                                }
+                                label="Enable Notifications"
+                            />
+
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={soundEnabled}
+                                        onChange={(e) => setSoundEnabled(e.target.checked)}
+                                        disabled={!notificationsEnabled}
+                                    />
+                                }
+                                label="Enable Sound"
+                            />
+
+                            <FormControl fullWidth disabled={!notificationsEnabled || !soundEnabled}>
+                                <InputLabel>Notification Sound</InputLabel>
+                                <Select
+                                    value={notificationSound}
+                                    onChange={(e) => {
+                                        setNotificationSound(e.target.value);
+                                        playSound(e.target.value);
+                                    }}
+                                    label="Notification Sound"
+                                >
+                                    <MenuItem value="default">Default</MenuItem>
+                                    <MenuItem value="chime">Chime</MenuItem>
+                                    <MenuItem value="ding">Ding</MenuItem>
+                                    <MenuItem value="pop">Pop</MenuItem>
+                                </Select>
+                            </FormControl>
                         </Box>
-                    </motion.div>
-                )}
-            </Box>
-        </Box>
+                    </Box>
+                </Box>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Cancel</Button>
+                <Button onClick={handleSave} variant="contained">Save</Button>
+            </DialogActions>
+        </Dialog>
     );
 };
 
