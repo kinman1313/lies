@@ -113,17 +113,60 @@ const MessageBubble = ({ message, isOwn }) => {
             >
                 {message.text?.startsWith('[GIF]') ? (
                     <Box
-                        component="img"
-                        src={message.text.replace('[GIF] ', '')}
-                        alt="GIF"
                         sx={{
+                            position: 'relative',
                             width: '100%',
-                            height: 'auto',
-                            maxHeight: '200px',
-                            objectFit: 'cover',
-                            borderRadius: bubbleStyle === 'modern' ? '12px' : '4px'
+                            '&:hover': {
+                                '& .gif-overlay': {
+                                    opacity: 1
+                                }
+                            }
                         }}
-                    />
+                    >
+                        <Box
+                            component="img"
+                            src={message.text.replace('[GIF] ', '')}
+                            alt="GIF"
+                            loading="lazy"
+                            sx={{
+                                width: '100%',
+                                height: 'auto',
+                                maxHeight: '300px',
+                                objectFit: 'contain',
+                                borderRadius: bubbleStyle === 'modern' ? '12px' : '4px',
+                                display: 'block'
+                            }}
+                        />
+                        <Box
+                            className="gif-overlay"
+                            sx={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                background: 'rgba(0,0,0,0.3)',
+                                opacity: 0,
+                                transition: 'opacity 0.2s ease-in-out',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: bubbleStyle === 'modern' ? '12px' : '4px'
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'white',
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px'
+                                }}
+                            >
+                                GIF
+                            </Typography>
+                        </Box>
+                    </Box>
                 ) : message.text?.startsWith('[VOICE]') ? (
                     <Box sx={{
                         display: 'flex',
