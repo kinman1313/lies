@@ -29,6 +29,31 @@ const messageSchema = new mongoose.Schema({
         ref: 'Room',
         required: true
     },
+    // File attachment fields
+    fileUrl: {
+        type: String
+    },
+    fileName: {
+        type: String
+    },
+    fileSize: {
+        type: Number
+    },
+    fileType: {
+        type: String
+    },
+    // Disappearing message fields
+    expiresAt: {
+        type: Date
+    },
+    expirationMinutes: {
+        type: Number
+    },
+    isExpired: {
+        type: Boolean,
+        default: false
+    },
+    // Pinned message fields
     isPinned: {
         type: Boolean,
         default: false
@@ -40,6 +65,7 @@ const messageSchema = new mongoose.Schema({
     pinnedAt: {
         type: Date
     },
+    // Message reactions
     reactions: [{
         emoji: String,
         count: {
@@ -51,6 +77,7 @@ const messageSchema = new mongoose.Schema({
             ref: 'User'
         }]
     }],
+    // Reply functionality
     replyTo: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Message'
@@ -63,6 +90,7 @@ const messageSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    // Scheduled message fields
     scheduledFor: {
         type: Date
     },
@@ -70,6 +98,7 @@ const messageSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    // Edit history
     editHistory: [{
         content: String,
         editedBy: {
@@ -85,6 +114,7 @@ const messageSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    // Soft delete
     isDeleted: {
         type: Boolean,
         default: false
@@ -96,6 +126,18 @@ const messageSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     },
+    // Read receipts
+    readBy: [{
+        userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        readAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+    // Timestamps
     createdAt: {
         type: Date,
         default: Date.now
@@ -106,9 +148,15 @@ const messageSchema = new mongoose.Schema({
     }
 });
 
-// Pre-save middleware to update timestamps
+// Pre-save middleware to update timestamps and handle expiration
 messageSchema.pre('save', function (next) {
     this.updatedAt = new Date();
+
+    // Set expiration date if expirationMinutes is set
+    if (this.expirationMinutes && !this.expiresAt) {
+        this.expiresAt = new Date(Date.now() + this.expirationMinutes * 60000);
+    }
+
     next();
 });
 
@@ -164,6 +212,40 @@ messageSchema.methods.cancelSchedule = async function () {
     this.scheduledFor = null;
     this.isScheduled = false;
     return this.save();
+};
+
+// Method to mark message as read by a user
+messageSchema.methods.markAsRead = async function (userId) {
+    if (!this.readBy.some(read => read.userId.equals(userId))) {
+        this.readBy.push({ userId, readAt: new Date() });
+        return this.save();
+    }
+    return this;
+};
+
+// Method to set message expiration
+messageSchema.methods.setExpiration = async function (minutes) {
+    this.expirationMinutes = minutes;
+    this.expiresAt = new Date(Date.now() + minutes * 60000);
+    return this.save();
+};
+
+// Static method to cleanup expired messages
+messageSchema.statics.cleanupExpiredMessages = async function () {
+    const now = new Date();
+    const expiredMessages = await this.find({
+        expiresAt: { $lte: now },
+        isExpired: false
+    });
+
+    for (const message of expiredMessages) {
+        message.isExpired = true;
+        message.isDeleted = true;
+        message.deletedAt = now;
+        await message.save();
+    }
+
+    return expiredMessages;
 };
 
 const Message = mongoose.model('Message', messageSchema);

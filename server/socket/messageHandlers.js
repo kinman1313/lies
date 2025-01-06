@@ -1,10 +1,12 @@
 const Message = require('../models/Message');
 const Room = require('../models/Room');
 const messageScheduler = require('../services/messageScheduler');
+const messageCleanupService = require('../services/messageCleanupService');
+const { uploadFile } = require('../services/fileService');
 
 async function handleMessage(socket, data) {
     try {
-        const { content, type, roomId, metadata = {}, replyTo, scheduledFor } = data;
+        const { content, type, roomId, metadata = {}, replyTo, scheduledFor, expirationMinutes, file } = data;
         const userId = socket.user._id;
 
         // Check if user has permission to send messages in this room/channel
@@ -18,6 +20,18 @@ async function handleMessage(socket, data) {
             throw new Error('Not a member of this room');
         }
 
+        // Handle file upload if present
+        let fileData = {};
+        if (file) {
+            const uploadResult = await uploadFile(file);
+            fileData = {
+                fileUrl: uploadResult.url,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type
+            };
+        }
+
         // If this is a scheduled message
         if (scheduledFor) {
             const scheduledMessage = await messageScheduler.scheduleMessage({
@@ -27,7 +41,8 @@ async function handleMessage(socket, data) {
                 metadata,
                 replyTo,
                 userId,
-                username: socket.user.username
+                username: socket.user.username,
+                ...fileData
             }, new Date(scheduledFor));
 
             socket.emit('message', {
@@ -45,8 +60,14 @@ async function handleMessage(socket, data) {
             metadata,
             replyTo,
             userId,
-            username: socket.user.username
+            username: socket.user.username,
+            ...fileData
         });
+
+        // Set expiration if specified
+        if (expirationMinutes) {
+            await message.setExpiration(expirationMinutes);
+        }
 
         await message.save();
 
@@ -118,6 +139,84 @@ async function handleReaction(socket, data) {
     }
 }
 
+async function handlePin(socket, data) {
+    try {
+        const { messageId, unpin } = data;
+        const userId = socket.user._id;
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            throw new Error('Message not found');
+        }
+
+        if (unpin) {
+            message.isPinned = false;
+            message.pinnedBy = null;
+            message.pinnedAt = null;
+        } else {
+            message.isPinned = true;
+            message.pinnedBy = userId;
+            message.pinnedAt = new Date();
+        }
+
+        await message.save();
+
+        // Emit the pin update to all users in the room
+        socket.to(message.roomId).emit('message', {
+            type: 'pin',
+            messageId: message._id,
+            isPinned: message.isPinned,
+            pinnedBy: message.pinnedBy,
+            pinnedAt: message.pinnedAt
+        });
+
+        // Acknowledge the pin update
+        socket.emit('message', {
+            type: 'pin',
+            messageId: message._id,
+            isPinned: message.isPinned,
+            pinnedBy: message.pinnedBy,
+            pinnedAt: message.pinnedAt
+        });
+
+    } catch (error) {
+        console.error('Error handling pin:', error);
+        socket.emit('error', {
+            type: 'pin',
+            message: error.message
+        });
+    }
+}
+
+async function handleMarkRead(socket, data) {
+    try {
+        const { messageId } = data;
+        const userId = socket.user._id;
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            throw new Error('Message not found');
+        }
+
+        await message.markAsRead(userId);
+
+        // Emit read receipt to all users in the room
+        socket.to(message.roomId).emit('message', {
+            type: 'read',
+            messageId: message._id,
+            userId,
+            readAt: new Date()
+        });
+
+    } catch (error) {
+        console.error('Error handling mark read:', error);
+        socket.emit('error', {
+            type: 'read',
+            message: error.message
+        });
+    }
+}
+
 async function handleScheduledMessage(socket, data) {
     try {
         const { messageId, action, scheduledFor } = data;
@@ -179,5 +278,7 @@ module.exports = {
     handleMessage,
     handleReaction,
     handleScheduledMessage,
-    handleReply
+    handleReply,
+    handlePin,
+    handleMarkRead
 }; 

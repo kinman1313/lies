@@ -1,132 +1,70 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-    Paper,
-    Typography,
     Box,
+    Typography,
     IconButton,
-    Slider,
     Menu,
     MenuItem,
-    TextField,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    Select,
-    FormControl,
-    InputLabel,
+    Paper,
     Tooltip,
-    Divider
+    CircularProgress,
+    Chip,
+    Stack,
+    Collapse,
+    LinearProgress
 } from '@mui/material';
 import {
-    PlayArrow as PlayIcon,
-    Pause as PauseIcon,
     MoreVert as MoreVertIcon,
-    PushPin as PinIcon,
-    Edit as EditIcon,
-    Delete as DeleteIcon,
-    Check as CheckIcon,
-    Close as CloseIcon,
-    Download as DownloadIcon,
+    PlayArrow as PlayArrowIcon,
+    Pause as PauseIcon,
+    Schedule as ScheduleIcon,
     Timer as TimerIcon,
-    TimerOff as TimerOffIcon
+    PushPin as PushPinIcon,
+    Download as DownloadIcon,
+    EmojiEmotions as EmojiIcon,
+    Reply as ReplyIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../contexts/AuthContext';
+import EmojiPicker from './EmojiPicker';
 import { useSocket } from '../contexts/SocketContext';
-import { format, formatDistanceToNow } from 'date-fns';
-
-const bubbleVariants = {
-    modern: {
-        borderRadius: '18px',
-        padding: '10px 16px',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)'
-    },
-    classic: {
-        borderRadius: '4px',
-        padding: '8px 12px'
-    },
-    minimal: {
-        borderRadius: '0px',
-        padding: '6px 10px',
-        boxShadow: 'none'
-    }
-};
-
-const expirationOptions = [
-    { value: 1, label: '1 minute' },
-    { value: 5, label: '5 minutes' },
-    { value: 15, label: '15 minutes' },
-    { value: 30, label: '30 minutes' },
-    { value: 60, label: '1 hour' },
-    { value: 1440, label: '24 hours' }
-];
+import { useAuth } from '../contexts/AuthContext';
+import { formatDistanceToNow, formatDistance } from 'date-fns';
 
 const MessageBubble = ({ message, isOwn }) => {
-    const { user } = useAuth();
     const { socket } = useSocket();
-    const bubbleStyle = user.preferences?.bubbleStyle || 'modern';
-    const messageColor = user.preferences?.messageColor || '#7C4DFF';
+    const { user } = useAuth();
+    const [anchorEl, setAnchorEl] = useState(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
-    const [anchorEl, setAnchorEl] = useState(null);
-    const [isEditing, setIsEditing] = useState(false);
-    const [editContent, setEditContent] = useState(message.content);
-    const [expirationDialogOpen, setExpirationDialogOpen] = useState(false);
-    const [selectedExpiration, setSelectedExpiration] = useState(5);
     const [timeLeft, setTimeLeft] = useState(null);
-    const audioRef = useRef(new Audio());
-    const timerRef = useRef(null);
+    const audioRef = useRef(null);
+    const progressInterval = useRef(null);
 
     useEffect(() => {
         if (message.expiresAt) {
             const updateTimeLeft = () => {
                 const now = new Date();
                 const expiry = new Date(message.expiresAt);
-                const diff = expiry - now;
-
-                if (diff <= 0) {
+                if (now >= expiry) {
                     setTimeLeft('Expired');
-                    clearInterval(timerRef.current);
+                    clearInterval(progressInterval.current);
                 } else {
-                    setTimeLeft(formatDistanceToNow(expiry, { addSuffix: true }));
+                    setTimeLeft(formatDistance(expiry, now, { addSuffix: true }));
                 }
             };
-
             updateTimeLeft();
-            timerRef.current = setInterval(updateTimeLeft, 1000);
-
-            return () => {
-                if (timerRef.current) {
-                    clearInterval(timerRef.current);
-                }
-            };
+            progressInterval.current = setInterval(updateTimeLeft, 1000);
         }
-    }, [message.expiresAt]);
 
-    const formatTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const handlePlayPause = () => {
-        if (isPlaying) {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        } else {
-            if (message.type === 'voice') {
-                audioRef.current.src = message.content;
-                audioRef.current.play().catch(error => {
-                    console.error('Error playing audio:', error);
-                });
-                setIsPlaying(true);
+        return () => {
+            if (progressInterval.current) {
+                clearInterval(progressInterval.current);
             }
-        }
-    };
+        };
+    }, [message.expiresAt]);
 
     const handleMenuOpen = (event) => {
         setAnchorEl(event.currentTarget);
@@ -136,326 +74,210 @@ const MessageBubble = ({ message, isOwn }) => {
         setAnchorEl(null);
     };
 
+    const handleReaction = (emoji) => {
+        socket.emit('reaction', {
+            messageId: message._id,
+            emoji
+        });
+        setShowEmojiPicker(false);
+    };
+
     const handlePin = () => {
-        socket.emit('pin', { messageId: message._id });
+        socket.emit('pin', {
+            messageId: message._id,
+            unpin: message.isPinned
+        });
         handleMenuClose();
     };
 
-    const handleUnpin = () => {
-        socket.emit('unpin', { messageId: message._id });
+    const handleReply = () => {
+        // Implement reply functionality
         handleMenuClose();
     };
 
     const handleEdit = () => {
-        setIsEditing(true);
+        // Implement edit functionality
         handleMenuClose();
     };
 
     const handleDelete = () => {
-        socket.emit('delete', { messageId: message._id });
+        // Implement delete functionality
         handleMenuClose();
     };
 
-    const handleSaveEdit = () => {
-        socket.emit('edit', { messageId: message._id, content: editContent });
-        setIsEditing(false);
-    };
-
-    const handleCancelEdit = () => {
-        setEditContent(message.content);
-        setIsEditing(false);
+    const handlePlayVoice = () => {
+        if (audioRef.current) {
+            if (isPlaying) {
+                audioRef.current.pause();
+            } else {
+                audioRef.current.play();
+            }
+            setIsPlaying(!isPlaying);
+        }
     };
 
     const handleDownload = () => {
-        if (message.type === 'file') {
+        if (message.fileUrl) {
             window.open(message.fileUrl, '_blank');
         }
     };
 
-    const handleOpenExpirationDialog = () => {
-        setExpirationDialogOpen(true);
-        handleMenuClose();
-    };
-
-    const handleSetExpiration = () => {
-        socket.emit('setExpiration', {
-            messageId: message._id,
-            expirationMinutes: selectedExpiration
-        });
-        setExpirationDialogOpen(false);
-    };
-
-    const handleRemoveExpiration = () => {
-        socket.emit('setExpiration', {
-            messageId: message._id,
-            expirationMinutes: null
-        });
-        handleMenuClose();
-    };
-
-    React.useEffect(() => {
-        if (message.type === 'voice') {
-            audioRef.current.src = message.content;
-
-            const handleLoadedMetadata = () => {
-                setDuration(audioRef.current.duration);
-            };
-
-            const handleTimeUpdate = () => {
-                setCurrentTime(audioRef.current.currentTime);
-            };
-
-            const handleEnded = () => {
-                setIsPlaying(false);
-                setCurrentTime(0);
-            };
-
-            audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
-            audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
-            audioRef.current.addEventListener('ended', handleEnded);
-
-            return () => {
-                audioRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
-                audioRef.current.removeEventListener('timeupdate', handleTimeUpdate);
-                audioRef.current.removeEventListener('ended', handleEnded);
-                audioRef.current.pause();
-                audioRef.current.src = '';
-            };
-        }
-    }, [message.content, message.type]);
-
-    React.useEffect(() => {
-        // Mark message as read when it becomes visible
-        if (!isOwn && !message.readBy?.some(read => read.user === user._id)) {
-            socket.emit('markRead', { messageId: message._id });
-        }
-    }, [message._id, isOwn, user._id, message.readBy]);
-
     const renderContent = () => {
-        if (message.isDeleted) {
-            return (
-                <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                    This message has been deleted
-                </Typography>
-            );
-        }
-
-        if (isEditing) {
-            return (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <TextField
-                        fullWidth
-                        multiline
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        variant="outlined"
-                        size="small"
-                    />
-                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                        <IconButton size="small" onClick={handleSaveEdit}>
-                            <CheckIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" onClick={handleCancelEdit}>
-                            <CloseIcon fontSize="small" />
-                        </IconButton>
-                    </Box>
-                </Box>
-            );
-        }
-
         switch (message.type) {
-            case 'text':
-                return <Typography>{message.content}</Typography>;
-            case 'gif':
-                return <img src={message.content} alt="GIF" style={{ maxWidth: '100%', borderRadius: '8px' }} />;
             case 'voice':
                 return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <IconButton onClick={handlePlayPause} size="small">
-                            {isPlaying ? <PauseIcon /> : <PlayIcon />}
-                        </IconButton>
-                        <Slider
-                            size="small"
-                            value={currentTime}
-                            max={duration}
-                            onChange={(_, value) => {
-                                audioRef.current.currentTime = value;
-                            }}
-                            sx={{ flexGrow: 1 }}
+                    <Box>
+                        <audio
+                            ref={audioRef}
+                            src={message.fileUrl}
+                            onLoadedMetadata={() => setDuration(audioRef.current.duration)}
+                            onTimeUpdate={() => setCurrentTime(audioRef.current.currentTime)}
+                            onEnded={() => setIsPlaying(false)}
                         />
-                        <Typography variant="caption">
-                            {formatTime(currentTime)} / {formatTime(duration)}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <IconButton onClick={handlePlayVoice}>
+                                {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+                            </IconButton>
+                            <LinearProgress
+                                variant="determinate"
+                                value={(currentTime / duration) * 100}
+                                sx={{ flexGrow: 1 }}
+                            />
+                            <Typography variant="caption">
+                                {Math.floor(currentTime)}s / {Math.floor(duration)}s
+                            </Typography>
+                        </Box>
                     </Box>
                 );
+
+            case 'gif':
+                return (
+                    <Box
+                        component="img"
+                        src={message.content}
+                        alt={message.metadata?.title || 'GIF'}
+                        sx={{ maxWidth: 300, borderRadius: 1 }}
+                    />
+                );
+
             case 'file':
                 return (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography>{message.fileName}</Typography>
-                        <IconButton size="small" onClick={handleDownload}>
-                            <DownloadIcon fontSize="small" />
+                        <IconButton onClick={handleDownload} size="small">
+                            <DownloadIcon />
                         </IconButton>
                     </Box>
                 );
+
             default:
-                return null;
+                return <Typography>{message.content}</Typography>;
         }
     };
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{
-                type: "spring",
-                stiffness: 260,
-                damping: 20
-            }}
-            style={{
-                alignSelf: isOwn ? 'flex-end' : 'flex-start',
-                maxWidth: message.type === 'gif' ? '300px' : '70%',
-                marginBottom: '8px',
-                position: 'relative'
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: isOwn ? 'flex-end' : 'flex-start',
+                mb: 1
             }}
         >
             <Paper
                 elevation={1}
                 sx={{
-                    ...bubbleVariants[bubbleStyle],
-                    backgroundColor: isOwn ? messageColor : 'background.paper',
-                    color: isOwn ? 'white' : 'text.primary',
-                    position: 'relative'
+                    p: 1,
+                    backgroundColor: isOwn ? 'primary.light' : 'background.paper',
+                    maxWidth: '70%'
                 }}
             >
-                {message.isPinned && (
-                    <PinIcon
-                        sx={{
-                            position: 'absolute',
-                            top: -12,
-                            right: -12,
-                            transform: 'rotate(45deg)',
-                            color: 'primary.main',
-                            fontSize: 20
-                        }}
-                    />
-                )}
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 'medium' }}>
-                        {message.username}
-                    </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="caption" color="textSecondary">
+                            {message.username}
+                        </Typography>
+                        {renderContent()}
+                    </Box>
                     <IconButton size="small" onClick={handleMenuOpen}>
                         <MoreVertIcon fontSize="small" />
                     </IconButton>
                 </Box>
 
-                {renderContent()}
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="caption" sx={{ color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
-                            {format(new Date(message.createdAt), 'HH:mm')}
-                            {message.isEdited && ' (edited)'}
-                        </Typography>
-                        {message.expiresAt && (
-                            <Tooltip title={`Expires ${timeLeft}`}>
-                                <TimerIcon
-                                    sx={{
-                                        fontSize: 14,
-                                        color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary'
-                                    }}
-                                />
-                            </Tooltip>
-                        )}
-                    </Box>
-                    {!isOwn && message.readBy?.length > 0 && (
-                        <Typography variant="caption" sx={{ color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
-                            Read by {message.readBy.length}
-                        </Typography>
+                {/* Message metadata */}
+                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    {message.isPinned && (
+                        <Tooltip title="Pinned">
+                            <PushPinIcon fontSize="small" color="primary" />
+                        </Tooltip>
                     )}
-                </Box>
+                    {message.scheduledFor && (
+                        <Tooltip title={`Scheduled for ${new Date(message.scheduledFor).toLocaleString()}`}>
+                            <ScheduleIcon fontSize="small" color="primary" />
+                        </Tooltip>
+                    )}
+                    {timeLeft && (
+                        <Tooltip title="Message will disappear">
+                            <Chip
+                                icon={<TimerIcon fontSize="small" />}
+                                label={timeLeft}
+                                size="small"
+                                color="warning"
+                            />
+                        </Tooltip>
+                    )}
+                </Stack>
+
+                {/* Reactions */}
+                {message.reactions?.length > 0 && (
+                    <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {message.reactions.map((reaction, index) => (
+                            <Chip
+                                key={index}
+                                label={`${reaction.emoji} ${reaction.count}`}
+                                size="small"
+                                onClick={() => handleReaction(reaction.emoji)}
+                            />
+                        ))}
+                    </Box>
+                )}
             </Paper>
 
+            {/* Message menu */}
             <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
                 onClose={handleMenuClose}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                }}
             >
-                {message.isPinned ? (
-                    <MenuItem onClick={handleUnpin}>
-                        <PinIcon sx={{ mr: 1 }} /> Unpin Message
-                    </MenuItem>
-                ) : (
-                    <MenuItem onClick={handlePin}>
-                        <PinIcon sx={{ mr: 1 }} /> Pin Message
-                    </MenuItem>
-                )}
-                {isOwn && !message.isDeleted && (
+                <MenuItem onClick={() => setShowEmojiPicker(true)}>
+                    <EmojiIcon fontSize="small" sx={{ mr: 1 }} /> React
+                </MenuItem>
+                <MenuItem onClick={handleReply}>
+                    <ReplyIcon fontSize="small" sx={{ mr: 1 }} /> Reply
+                </MenuItem>
+                <MenuItem onClick={handlePin}>
+                    <PushPinIcon fontSize="small" sx={{ mr: 1 }} />
+                    {message.isPinned ? 'Unpin' : 'Pin'}
+                </MenuItem>
+                {isOwn && (
                     <>
                         <MenuItem onClick={handleEdit}>
-                            <EditIcon sx={{ mr: 1 }} /> Edit Message
+                            <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
                         </MenuItem>
                         <MenuItem onClick={handleDelete}>
-                            <DeleteIcon sx={{ mr: 1 }} /> Delete Message
+                            <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
                         </MenuItem>
-                        <Divider />
-                        {message.expiresAt ? (
-                            <MenuItem onClick={handleRemoveExpiration}>
-                                <TimerOffIcon sx={{ mr: 1 }} /> Remove Expiration
-                            </MenuItem>
-                        ) : (
-                            <MenuItem onClick={handleOpenExpirationDialog}>
-                                <TimerIcon sx={{ mr: 1 }} /> Set Expiration
-                            </MenuItem>
-                        )}
                     </>
-                )}
-                {message.type === 'file' && (
-                    <MenuItem onClick={handleDownload}>
-                        <DownloadIcon sx={{ mr: 1 }} /> Download File
-                    </MenuItem>
                 )}
             </Menu>
 
-            <Dialog
-                open={expirationDialogOpen}
-                onClose={() => setExpirationDialogOpen(false)}
-                maxWidth="xs"
-                fullWidth
-            >
-                <DialogTitle>Set Message Expiration</DialogTitle>
-                <DialogContent>
-                    <FormControl fullWidth sx={{ mt: 2 }}>
-                        <InputLabel>Expiration Time</InputLabel>
-                        <Select
-                            value={selectedExpiration}
-                            onChange={(e) => setSelectedExpiration(e.target.value)}
-                            label="Expiration Time"
-                        >
-                            {expirationOptions.map((option) => (
-                                <MenuItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setExpirationDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSetExpiration} variant="contained">
-                        Set Expiration
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </motion.div>
+            {/* Emoji picker */}
+            <Collapse in={showEmojiPicker}>
+                <Paper sx={{ mt: 1, p: 1 }}>
+                    <EmojiPicker onSelect={handleReaction} />
+                </Paper>
+            </Collapse>
+        </Box>
     );
 };
 

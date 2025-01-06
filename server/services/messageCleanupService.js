@@ -1,8 +1,8 @@
 const Message = require('../models/Message');
+const { io } = require('../socket');
 
 class MessageCleanupService {
-    constructor(io) {
-        this.io = io;
+    constructor() {
         this.cleanupInterval = null;
     }
 
@@ -10,12 +10,17 @@ class MessageCleanupService {
         // Run cleanup every minute
         this.cleanupInterval = setInterval(async () => {
             try {
-                const deletedCount = await Message.cleanupExpiredMessages();
-                if (deletedCount > 0) {
-                    console.log(`Cleaned up ${deletedCount} expired messages`);
+                const expiredMessages = await Message.cleanupExpiredMessages();
+
+                // Notify rooms about expired messages
+                for (const message of expiredMessages) {
+                    io.to(message.roomId.toString()).emit('message', {
+                        type: 'expired',
+                        messageId: message._id
+                    });
                 }
             } catch (error) {
-                console.error('Error cleaning up expired messages:', error);
+                console.error('Error in message cleanup:', error);
             }
         }, 60000); // 1 minute
     }
@@ -27,15 +32,25 @@ class MessageCleanupService {
         }
     }
 
-    // Method to notify room about message expiration
-    async notifyMessageExpiration(message) {
-        if (this.io) {
-            this.io.to(message.roomId).emit('messageExpired', {
-                messageId: message._id,
-                roomId: message.roomId
-            });
+    // Method to manually trigger cleanup
+    async runCleanup() {
+        try {
+            const expiredMessages = await Message.cleanupExpiredMessages();
+
+            // Notify rooms about expired messages
+            for (const message of expiredMessages) {
+                io.to(message.roomId.toString()).emit('message', {
+                    type: 'expired',
+                    messageId: message._id
+                });
+            }
+
+            return expiredMessages;
+        } catch (error) {
+            console.error('Error in manual message cleanup:', error);
+            throw error;
         }
     }
 }
 
-module.exports = MessageCleanupService; 
+module.exports = new MessageCleanupService(); 
