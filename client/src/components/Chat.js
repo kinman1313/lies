@@ -8,7 +8,7 @@ import UserProfile from './UserProfile';
 import ThemeMenu from './ThemeMenu';
 import './Chat.css';
 
-const Chat = ({ user, onLogout }) => {
+const Chat = ({ user, onLogout, onUpdateUser }) => {
     const { socket } = useSocket();
     const [currentRoom, setCurrentRoom] = useState(null);
     const [rooms, setRooms] = useState([]);
@@ -285,6 +285,12 @@ const Chat = ({ user, onLogout }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    const handleUpdateUser = (updatedUser) => {
+        if (onUpdateUser) {
+            onUpdateUser(updatedUser);
+        }
+    };
+
     return (
         <div className="chat-container">
             <div className="sidebar">
@@ -322,6 +328,7 @@ const Chat = ({ user, onLogout }) => {
                     user={user}
                     onClose={() => setShowProfile(false)}
                     onUpdate={handleUpdateProfile}
+                    onUpdateUser={handleUpdateUser}
                 />
             )}
             {showThemeMenu && (
