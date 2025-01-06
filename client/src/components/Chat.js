@@ -9,7 +9,7 @@ import UserProfile from './UserProfile';
 
 const Chat = () => {
     const { socket } = useSocket();
-    const { user } = useAuth();
+    const { user, updateUser } = useAuth();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -17,6 +17,68 @@ const Chat = () => {
     const [currentRoomId, setCurrentRoomId] = useState(null);
     const [drawerOpen, setDrawerOpen] = useState(!isMobile);
     const [error, setError] = useState('');
+
+    const handleUpdateProfile = async (profile) => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/me`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ profile })
+            });
+            const data = await response.json();
+            if (data.user) {
+                updateUser(data.user);
+            }
+        } catch (error) {
+            console.error('Error updating profile:', error);
+        }
+    };
+
+    const handleUpdatePreferences = async (preferences) => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/me`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ preferences })
+            });
+            const data = await response.json();
+            if (data.user) {
+                updateUser(data.user);
+            }
+        } catch (error) {
+            console.error('Error updating preferences:', error);
+        }
+    };
+
+    const handleUpdateAvatar = async (avatarUrl) => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/me`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    profile: {
+                        ...user.profile,
+                        avatar: { url: avatarUrl }
+                    }
+                })
+            });
+            const data = await response.json();
+            if (data.user) {
+                updateUser(data.user);
+            }
+        } catch (error) {
+            console.error('Error updating avatar:', error);
+        }
+    };
 
     useEffect(() => {
         if (socket) {
@@ -68,7 +130,12 @@ const Chat = () => {
 
     const drawerContent = (
         <Box sx={{ width: 320, height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <UserProfile />
+            <UserProfile
+                user={user}
+                onUpdateProfile={handleUpdateProfile}
+                onUpdatePreferences={handleUpdatePreferences}
+                onUpdateAvatar={handleUpdateAvatar}
+            />
             <Divider />
             <RoomList
                 rooms={rooms}
