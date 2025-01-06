@@ -99,6 +99,13 @@ const messageSchema = new mongoose.Schema({
             default: Date.now
         }
     }],
+    // New fields for disappearing messages
+    expiresAt: {
+        type: Date
+    },
+    expirationMinutes: {
+        type: Number
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -111,6 +118,12 @@ const messageSchema = new mongoose.Schema({
 
 messageSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
+
+    // Set expiration date if expirationMinutes is set
+    if (this.expirationMinutes && !this.expiresAt) {
+        this.expiresAt = new Date(Date.now() + this.expirationMinutes * 60000);
+    }
+
     next();
 });
 
@@ -121,6 +134,7 @@ messageSchema.index({ userId: 1 });
 messageSchema.index({ 'reactions.users': 1 });
 messageSchema.index({ 'readBy.user': 1 });
 messageSchema.index({ isDeleted: 1 });
+messageSchema.index({ expiresAt: 1 }); // New index for querying expired messages
 
 // Methods
 messageSchema.methods.pin = async function (userId) {
@@ -190,6 +204,28 @@ messageSchema.methods.removeReaction = async function (emoji, userId) {
     }
 };
 
+// New method to set message expiration
+messageSchema.methods.setExpiration = async function (minutes) {
+    this.expirationMinutes = minutes;
+    this.expiresAt = new Date(Date.now() + minutes * 60000);
+    await this.save();
+};
+
+// New static method to clean up expired messages
+messageSchema.statics.cleanupExpiredMessages = async function () {
+    const now = new Date();
+    const expiredMessages = await this.find({
+        expiresAt: { $lte: now },
+        isDeleted: false
+    });
+
+    for (const message of expiredMessages) {
+        await message.softDelete('system');
+    }
+
+    return expiredMessages.length;
+};
+
 // Statics
 messageSchema.statics.findPinnedByRoom = function (roomId) {
     return this.find({ roomId, isPinned: true })
@@ -198,7 +234,13 @@ messageSchema.statics.findPinnedByRoom = function (roomId) {
 };
 
 messageSchema.statics.findByRoom = function (roomId, limit = 50, before) {
-    const query = { roomId };
+    const query = {
+        roomId,
+        $or: [
+            { expiresAt: { $gt: new Date() } },
+            { expiresAt: null }
+        ]
+    };
     if (before) {
         query.createdAt = { $lt: before };
     }

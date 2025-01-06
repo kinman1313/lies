@@ -4,7 +4,7 @@ const User = require('../models/User');
 
 const handleMessage = async (io, socket, data) => {
     try {
-        const { type, content, metadata, roomId } = data;
+        const { type, content, metadata, roomId, expirationMinutes } = data;
 
         // Validate message type
         if (!['text', 'gif', 'voice', 'file'].includes(type)) {
@@ -18,7 +18,8 @@ const handleMessage = async (io, socket, data) => {
             metadata,
             roomId,
             username: socket.username,
-            userId: socket.userId
+            userId: socket.userId,
+            expirationMinutes // Add expiration if set
         });
 
         await message.save();
@@ -27,7 +28,8 @@ const handleMessage = async (io, socket, data) => {
         io.to(roomId).emit('message', {
             ...message.toObject(),
             createdAt: message.createdAt,
-            username: socket.username
+            username: socket.username,
+            expiresAt: message.expiresAt
         });
 
         // Handle specific message types
@@ -198,6 +200,31 @@ const handleMarkRead = async (io, socket, data) => {
     }
 };
 
+// New handler for setting message expiration
+const handleSetExpiration = async (io, socket, data) => {
+    try {
+        const { messageId, expirationMinutes } = data;
+        const message = await Message.findById(messageId);
+
+        if (!message) {
+            throw new Error('Message not found');
+        }
+
+        if (message.userId.toString() !== socket.userId) {
+            throw new Error('Unauthorized to set message expiration');
+        }
+
+        await message.setExpiration(expirationMinutes);
+        io.to(message.roomId).emit('messageExpirationSet', {
+            messageId,
+            expiresAt: message.expiresAt
+        });
+    } catch (error) {
+        console.error('Error setting message expiration:', error);
+        socket.emit('error', { message: 'Failed to set message expiration' });
+    }
+};
+
 module.exports = {
     handleMessage,
     handleTyping,
@@ -205,5 +232,6 @@ module.exports = {
     handleUnpin,
     handleEdit,
     handleDelete,
-    handleMarkRead
+    handleMarkRead,
+    handleSetExpiration
 }; 

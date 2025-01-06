@@ -1,5 +1,23 @@
-import React, { useState, useRef } from 'react';
-import { Paper, Typography, Box, IconButton, Slider, Menu, MenuItem, TextField } from '@mui/material';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+    Paper,
+    Typography,
+    Box,
+    IconButton,
+    Slider,
+    Menu,
+    MenuItem,
+    TextField,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Select,
+    FormControl,
+    InputLabel,
+    Tooltip
+} from '@mui/material';
 import {
     PlayArrow as PlayIcon,
     Pause as PauseIcon,
@@ -9,12 +27,14 @@ import {
     Delete as DeleteIcon,
     Check as CheckIcon,
     Close as CloseIcon,
-    Download as DownloadIcon
+    Download as DownloadIcon,
+    Timer as TimerIcon,
+    TimerOff as TimerOffIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 const bubbleVariants = {
     modern: {
@@ -34,6 +54,15 @@ const bubbleVariants = {
     }
 };
 
+const expirationOptions = [
+    { value: 1, label: '1 minute' },
+    { value: 5, label: '5 minutes' },
+    { value: 15, label: '15 minutes' },
+    { value: 30, label: '30 minutes' },
+    { value: 60, label: '1 hour' },
+    { value: 1440, label: '24 hours' }
+];
+
 const MessageBubble = ({ message, isOwn }) => {
     const { user } = useAuth();
     const { socket } = useSocket();
@@ -45,7 +74,37 @@ const MessageBubble = ({ message, isOwn }) => {
     const [anchorEl, setAnchorEl] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(message.content);
+    const [expirationDialogOpen, setExpirationDialogOpen] = useState(false);
+    const [selectedExpiration, setSelectedExpiration] = useState(5);
+    const [timeLeft, setTimeLeft] = useState(null);
     const audioRef = useRef(new Audio());
+    const timerRef = useRef(null);
+
+    useEffect(() => {
+        if (message.expiresAt) {
+            const updateTimeLeft = () => {
+                const now = new Date();
+                const expiry = new Date(message.expiresAt);
+                const diff = expiry - now;
+
+                if (diff <= 0) {
+                    setTimeLeft('Expired');
+                    clearInterval(timerRef.current);
+                } else {
+                    setTimeLeft(formatDistanceToNow(expiry, { addSuffix: true }));
+                }
+            };
+
+            updateTimeLeft();
+            timerRef.current = setInterval(updateTimeLeft, 1000);
+
+            return () => {
+                if (timerRef.current) {
+                    clearInterval(timerRef.current);
+                }
+            };
+        }
+    }, [message.expiresAt]);
 
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
@@ -110,6 +169,27 @@ const MessageBubble = ({ message, isOwn }) => {
         if (message.type === 'file') {
             window.open(message.fileUrl, '_blank');
         }
+    };
+
+    const handleOpenExpirationDialog = () => {
+        setExpirationDialogOpen(true);
+        handleMenuClose();
+    };
+
+    const handleSetExpiration = () => {
+        socket.emit('setExpiration', {
+            messageId: message._id,
+            expirationMinutes: selectedExpiration
+        });
+        setExpirationDialogOpen(false);
+    };
+
+    const handleRemoveExpiration = () => {
+        socket.emit('setExpiration', {
+            messageId: message._id,
+            expirationMinutes: null
+        });
+        handleMenuClose();
     };
 
     React.useEffect(() => {
@@ -271,10 +351,22 @@ const MessageBubble = ({ message, isOwn }) => {
                 {renderContent()}
 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
-                        {format(new Date(message.createdAt), 'HH:mm')}
-                        {message.isEdited && ' (edited)'}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
+                            {format(new Date(message.createdAt), 'HH:mm')}
+                            {message.isEdited && ' (edited)'}
+                        </Typography>
+                        {message.expiresAt && (
+                            <Tooltip title={`Expires ${timeLeft}`}>
+                                <TimerIcon
+                                    sx={{
+                                        fontSize: 14,
+                                        color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary'
+                                    }}
+                                />
+                            </Tooltip>
+                        )}
+                    </Box>
                     {!isOwn && message.readBy?.length > 0 && (
                         <Typography variant="caption" sx={{ color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
                             Read by {message.readBy.length}
@@ -313,6 +405,16 @@ const MessageBubble = ({ message, isOwn }) => {
                         <MenuItem onClick={handleDelete}>
                             <DeleteIcon sx={{ mr: 1 }} /> Delete Message
                         </MenuItem>
+                        <Divider />
+                        {message.expiresAt ? (
+                            <MenuItem onClick={handleRemoveExpiration}>
+                                <TimerOffIcon sx={{ mr: 1 }} /> Remove Expiration
+                            </MenuItem>
+                        ) : (
+                            <MenuItem onClick={handleOpenExpirationDialog}>
+                                <TimerIcon sx={{ mr: 1 }} /> Set Expiration
+                            </MenuItem>
+                        )}
                     </>
                 )}
                 {message.type === 'file' && (
@@ -321,6 +423,37 @@ const MessageBubble = ({ message, isOwn }) => {
                     </MenuItem>
                 )}
             </Menu>
+
+            <Dialog
+                open={expirationDialogOpen}
+                onClose={() => setExpirationDialogOpen(false)}
+                maxWidth="xs"
+                fullWidth
+            >
+                <DialogTitle>Set Message Expiration</DialogTitle>
+                <DialogContent>
+                    <FormControl fullWidth sx={{ mt: 2 }}>
+                        <InputLabel>Expiration Time</InputLabel>
+                        <Select
+                            value={selectedExpiration}
+                            onChange={(e) => setSelectedExpiration(e.target.value)}
+                            label="Expiration Time"
+                        >
+                            {expirationOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setExpirationDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSetExpiration} variant="contained">
+                        Set Expiration
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </motion.div>
     );
 };
