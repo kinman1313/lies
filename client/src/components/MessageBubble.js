@@ -40,34 +40,49 @@ const MessageBubble = ({ message, isOwn }) => {
     const handlePlayPause = () => {
         if (isPlaying) {
             audioRef.current.pause();
+            setIsPlaying(false);
         } else {
-            if (message.text.startsWith('[VOICE] ')) {
-                audioRef.current.src = message.text.replace('[VOICE] ', '');
-                audioRef.current.play();
+            if (message.text.startsWith('[VOICE]')) {
+                const audioUrl = message.text.replace('[VOICE] blob:', '');
+                audioRef.current.src = audioUrl;
+                audioRef.current.play().catch(error => {
+                    console.error('Error playing audio:', error);
+                });
+                setIsPlaying(true);
             }
         }
-        setIsPlaying(!isPlaying);
     };
 
     React.useEffect(() => {
-        if (message.text.startsWith('[VOICE] ')) {
-            audioRef.current.src = message.text.replace('[VOICE] ', '');
-            audioRef.current.addEventListener('loadedmetadata', () => {
+        if (message.text.startsWith('[VOICE]')) {
+            const audioUrl = message.text.replace('[VOICE] blob:', '');
+            audioRef.current.src = audioUrl;
+
+            const handleLoadedMetadata = () => {
                 setDuration(audioRef.current.duration);
-            });
-            audioRef.current.addEventListener('timeupdate', () => {
+            };
+
+            const handleTimeUpdate = () => {
                 setCurrentTime(audioRef.current.currentTime);
-            });
-            audioRef.current.addEventListener('ended', () => {
+            };
+
+            const handleEnded = () => {
                 setIsPlaying(false);
                 setCurrentTime(0);
-            });
-        }
+            };
 
-        return () => {
-            audioRef.current.pause();
-            audioRef.current.src = '';
-        };
+            audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+            audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
+            audioRef.current.addEventListener('ended', handleEnded);
+
+            return () => {
+                audioRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+                audioRef.current.removeEventListener('timeupdate', handleTimeUpdate);
+                audioRef.current.removeEventListener('ended', handleEnded);
+                audioRef.current.pause();
+                audioRef.current.src = '';
+            };
+        }
     }, [message.text]);
 
     return (
@@ -110,11 +125,24 @@ const MessageBubble = ({ message, isOwn }) => {
                         }}
                     />
                 ) : message.text?.startsWith('[VOICE]') ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 250 }}>
+                    <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        minWidth: 250,
+                        p: 1,
+                        borderRadius: bubbleStyle === 'modern' ? '12px' : '4px',
+                        background: isOwn ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                    }}>
                         <IconButton
                             size="small"
                             onClick={handlePlayPause}
-                            sx={{ color: isOwn ? 'white' : 'inherit' }}
+                            sx={{
+                                color: isOwn ? 'white' : 'inherit',
+                                '&:hover': {
+                                    background: isOwn ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)'
+                                }
+                            }}
                         >
                             {isPlaying ? <PauseIcon /> : <PlayIcon />}
                         </IconButton>
@@ -122,7 +150,7 @@ const MessageBubble = ({ message, isOwn }) => {
                             <Slider
                                 size="small"
                                 value={currentTime}
-                                max={duration}
+                                max={duration || 0}
                                 onChange={(_, value) => {
                                     audioRef.current.currentTime = value;
                                     setCurrentTime(value);
@@ -139,7 +167,13 @@ const MessageBubble = ({ message, isOwn }) => {
                                 }}
                             />
                         </Box>
-                        <Typography variant="caption" sx={{ minWidth: 45 }}>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                minWidth: 45,
+                                color: isOwn ? 'rgba(255, 255, 255, 0.8)' : 'inherit'
+                            }}
+                        >
                             {formatTime(currentTime)} / {formatTime(duration)}
                         </Typography>
                     </Box>

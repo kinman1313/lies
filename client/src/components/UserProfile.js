@@ -88,13 +88,27 @@ const UserProfile = ({
         }
     }, [user]);
 
+    useEffect(() => {
+        if (user?.preferences) {
+            setPreferences({
+                theme: user.preferences.theme || 'light',
+                language: user.preferences.language || 'en',
+                notifications: user.preferences.notifications || true,
+                messageColor: user.preferences.messageColor || '#7C4DFF',
+                bubbleStyle: user.preferences.bubbleStyle || 'modern'
+            });
+        }
+    }, [user]);
+
     const handleSaveProfile = () => {
         onUpdateProfile(profile);
         setEditMode(false);
     };
 
-    const handleSavePreferences = () => {
-        onUpdatePreferences(preferences);
+    const handleSavePreferences = (newPreferences) => {
+        if (onUpdatePreferences) {
+            onUpdatePreferences(newPreferences || preferences);
+        }
     };
 
     const handleAvatarChange = (event) => {
@@ -109,11 +123,28 @@ const UserProfile = ({
     };
 
     const handleSaveAvatar = () => {
-        if (newAvatar) {
-            onUpdateAvatar(newAvatar);
-            setAvatarDialogOpen(false);
-            setNewAvatar(null);
+        if (newAvatar && onUpdateAvatar) {
+            try {
+                onUpdateAvatar(newAvatar);
+                setAvatarDialogOpen(false);
+                setNewAvatar(null);
+            } catch (error) {
+                console.error('Error updating avatar:', error);
+            }
         }
+    };
+
+    const handleColorChange = (event) => {
+        const newColor = event.target.value;
+        setPreferences(prev => ({
+            ...prev,
+            messageColor: newColor
+        }));
+        // Save the color change immediately
+        handleSavePreferences({
+            ...preferences,
+            messageColor: newColor
+        });
     };
 
     return (
@@ -382,14 +413,14 @@ const UserProfile = ({
                                     <PaletteIcon />
                                 </ListItemIcon>
                                 <ListItemText
-                                    primary="Message Color"
+                                    primary="Message Bubble Color"
                                     secondary="Choose your message bubble color"
                                 />
                                 <input
                                     type="color"
                                     value={preferences.messageColor}
-                                    onChange={(e) => setPreferences(prev => ({ ...prev, messageColor: e.target.value }))}
-                                    style={{ width: 40, height: 40, padding: 0, border: 'none' }}
+                                    onChange={handleColorChange}
+                                    style={{ marginLeft: '8px' }}
                                 />
                             </ListItem>
                         </List>
@@ -440,7 +471,7 @@ const UserProfile = ({
                     <Button onClick={() => setAvatarDialogOpen(false)}>Cancel</Button>
                     <Button
                         onClick={handleSaveAvatar}
-                        disabled={!newAvatar}
+                        disabled={!newAvatar || !onUpdateAvatar}
                         variant="contained"
                     >
                         Save
