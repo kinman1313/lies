@@ -4,6 +4,8 @@ import { SocketProvider } from './contexts/SocketContext';
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
+import ResetPassword from './components/ResetPassword';
+import NewPassword from './components/NewPassword';
 import Chat from './components/Chat';
 import PrivateRoute from './components/PrivateRoute';
 import './App.css';
@@ -17,6 +19,8 @@ function App() {
                         <Routes>
                             <Route path="/login" element={<Login />} />
                             <Route path="/register" element={<Register />} />
+                            <Route path="/reset-password" element={<ResetPassword />} />
+                            <Route path="/reset-password/:token" element={<NewPassword />} />
                             <Route
                                 path="/"
                                 element={
