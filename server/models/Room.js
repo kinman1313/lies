@@ -7,6 +7,15 @@ const roomSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    description: {
+        type: String,
+        trim: true
+    },
+    type: {
+        type: String,
+        enum: ['public', 'private', 'direct'],
+        default: 'public'
+    },
     ownerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
@@ -25,6 +34,41 @@ const roomSchema = new mongoose.Schema({
         joinedAt: {
             type: Date,
             default: Date.now
+        },
+        lastRead: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+    channels: [{
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        description: String,
+        type: {
+            type: String,
+            enum: ['text', 'voice', 'announcement'],
+            default: 'text'
+        },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        },
+        permissions: {
+            canSendMessages: [{
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User'
+            }],
+            canManageMessages: [{
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User'
+            }]
         }
     }],
     invites: [{
@@ -45,43 +89,20 @@ const roomSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Message'
     }],
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    lastActivity: {
-        type: Date,
-        default: Date.now
-    },
-    isPrivate: {
-        type: Boolean,
-        default: false
-    },
-    description: {
-        type: String,
-        trim: true
-    },
-    avatar: {
-        type: String
-    },
     settings: {
-        allowInvites: {
-            type: Boolean,
-            default: true
-        },
-        memberLimit: {
-            type: Number,
-            default: 100
-        },
-        messageRetention: {
-            type: Number,
-            default: 30 // days
-        },
         allowReactions: {
             type: Boolean,
             default: true
         },
-        allowPinning: {
+        allowReplies: {
+            type: Boolean,
+            default: true
+        },
+        allowPins: {
+            type: Boolean,
+            default: true
+        },
+        allowFileUploads: {
             type: Boolean,
             default: true
         },
@@ -89,39 +110,86 @@ const roomSchema = new mongoose.Schema({
             type: Boolean,
             default: true
         },
-        allowFileSharing: {
+        allowGifs: {
             type: Boolean,
             default: true
+        },
+        requireApprovalForJoin: {
+            type: Boolean,
+            default: false
         }
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
     }
 });
 
-// Indexes
-roomSchema.index({ name: 'text', description: 'text' });
-roomSchema.index({ 'members.userId': 1 });
-roomSchema.index({ 'invites.email': 1 });
-roomSchema.index({ lastActivity: -1 });
-roomSchema.index({ isPrivate: 1 });
+// Pre-save middleware
+roomSchema.pre('save', function (next) {
+    this.updatedAt = new Date();
+    next();
+});
 
-// Methods
+// Method to create a new channel
+roomSchema.methods.createChannel = async function (channelData, userId) {
+    this.channels.push({
+        ...channelData,
+        createdBy: userId,
+        createdAt: new Date()
+    });
+    return this.save();
+};
+
+// Method to delete a channel
+roomSchema.methods.deleteChannel = async function (channelId) {
+    this.channels = this.channels.filter(channel => !channel._id.equals(channelId));
+    return this.save();
+};
+
+// Method to update channel settings
+roomSchema.methods.updateChannel = async function (channelId, updates) {
+    const channel = this.channels.id(channelId);
+    if (channel) {
+        Object.assign(channel, updates);
+        return this.save();
+    }
+    throw new Error('Channel not found');
+};
+
+// Method to add a member
 roomSchema.methods.addMember = async function (userId, role = 'member') {
-    if (!this.members.find(m => m.userId.equals(userId))) {
+    if (!this.members.find(member => member.userId.equals(userId))) {
         this.members.push({
             userId,
             role,
             joinedAt: new Date()
         });
-        this.lastActivity = new Date();
-        await this.save();
+        return this.save();
     }
 };
 
+// Method to remove a member
 roomSchema.methods.removeMember = async function (userId) {
-    this.members = this.members.filter(m => !m.userId.equals(userId));
-    this.lastActivity = new Date();
-    await this.save();
+    this.members = this.members.filter(member => !member.userId.equals(userId));
+    return this.save();
 };
 
+// Method to update member role
+roomSchema.methods.updateMemberRole = async function (userId, newRole) {
+    const member = this.members.find(member => member.userId.equals(userId));
+    if (member) {
+        member.role = newRole;
+        return this.save();
+    }
+    throw new Error('Member not found');
+};
+
+// Method to create an invite
 roomSchema.methods.createInvite = async function (email, invitedBy, role = 'member') {
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date();
@@ -131,71 +199,17 @@ roomSchema.methods.createInvite = async function (email, invitedBy, role = 'memb
         email,
         token,
         invitedBy,
-        role,
-        expiresAt
+        expiresAt,
+        role
     });
 
-    await this.save();
-    return token;
+    return this.save();
 };
 
+// Method to validate an invite
 roomSchema.methods.validateInvite = async function (token) {
-    const invite = this.invites.find(inv => inv.token === token);
-    if (!invite) return null;
-
-    if (invite.expiresAt < new Date()) {
-        this.invites = this.invites.filter(inv => inv.token !== token);
-        await this.save();
-        return null;
-    }
-
-    return invite;
-};
-
-roomSchema.methods.removeInvite = async function (token) {
-    this.invites = this.invites.filter(inv => inv.token !== token);
-    await this.save();
-};
-
-roomSchema.methods.pinMessage = async function (messageId) {
-    if (!this.pinnedMessages.includes(messageId)) {
-        this.pinnedMessages.push(messageId);
-        await this.save();
-    }
-};
-
-roomSchema.methods.unpinMessage = async function (messageId) {
-    this.pinnedMessages = this.pinnedMessages.filter(id => !id.equals(messageId));
-    await this.save();
-};
-
-roomSchema.methods.updateRole = async function (userId, newRole) {
-    const member = this.members.find(m => m.userId.equals(userId));
-    if (member) {
-        member.role = newRole;
-        await this.save();
-    }
-};
-
-// Statics
-roomSchema.statics.findByMember = function (userId) {
-    return this.find({ 'members.userId': userId })
-        .sort({ lastActivity: -1 })
-        .populate('members.userId', 'username avatar')
-        .populate('pinnedMessages');
-};
-
-roomSchema.statics.findByInviteEmail = function (email) {
-    return this.find({
-        'invites.email': email,
-        'invites.expiresAt': { $gt: new Date() }
-    });
-};
-
-roomSchema.statics.findPublicRooms = function () {
-    return this.find({ isPrivate: false })
-        .sort({ lastActivity: -1 })
-        .select('-invites');
+    const invite = this.invites.find(inv => inv.token === token && inv.expiresAt > new Date());
+    return invite || null;
 };
 
 const Room = mongoose.model('Room', roomSchema);

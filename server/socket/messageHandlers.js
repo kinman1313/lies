@@ -1,237 +1,183 @@
 const Message = require('../models/Message');
 const Room = require('../models/Room');
-const User = require('../models/User');
+const messageScheduler = require('../services/messageScheduler');
 
-const handleMessage = async (io, socket, data) => {
+async function handleMessage(socket, data) {
     try {
-        const { type, content, metadata, roomId, expirationMinutes } = data;
+        const { content, type, roomId, metadata = {}, replyTo, scheduledFor } = data;
+        const userId = socket.user._id;
 
-        // Validate message type
-        if (!['text', 'gif', 'voice', 'file'].includes(type)) {
-            throw new Error('Invalid message type');
+        // Check if user has permission to send messages in this room/channel
+        const room = await Room.findById(roomId);
+        if (!room) {
+            throw new Error('Room not found');
         }
 
-        // Create message document
+        const member = room.members.find(m => m.userId.equals(userId));
+        if (!member) {
+            throw new Error('Not a member of this room');
+        }
+
+        // If this is a scheduled message
+        if (scheduledFor) {
+            const scheduledMessage = await messageScheduler.scheduleMessage({
+                content,
+                type,
+                roomId,
+                metadata,
+                replyTo,
+                userId,
+                username: socket.user.username
+            }, new Date(scheduledFor));
+
+            socket.emit('message', {
+                type: 'scheduled',
+                message: scheduledMessage
+            });
+            return;
+        }
+
+        // Create and save the message
         const message = new Message({
-            type,
             content,
-            metadata,
+            type,
             roomId,
-            username: socket.username,
-            userId: socket.userId,
-            expirationMinutes // Add expiration if set
+            metadata,
+            replyTo,
+            userId,
+            username: socket.user.username
         });
 
         await message.save();
 
-        // Emit message to room
-        io.to(roomId).emit('message', {
-            ...message.toObject(),
-            createdAt: message.createdAt,
-            username: socket.username,
-            expiresAt: message.expiresAt
-        });
-
-        // Handle specific message types
-        switch (type) {
-            case 'voice':
-                io.to(roomId).emit('voiceMessage', {
-                    messageId: message._id,
-                    duration: metadata?.duration || 0
-                });
-                break;
-            case 'gif':
-                io.to(roomId).emit('gifMessage', {
-                    messageId: message._id,
-                    dimensions: {
-                        width: metadata?.width,
-                        height: metadata?.height
-                    }
-                });
-                break;
-            case 'file':
-                io.to(roomId).emit('fileMessage', {
-                    messageId: message._id,
-                    fileName: metadata?.fileName,
-                    fileSize: metadata?.fileSize,
-                    fileType: metadata?.fileType
-                });
-                break;
-        }
-
-        // Update unread counts for users in the room
-        const room = await Room.findById(roomId).populate('members', '_id');
-        const onlineUsers = new Set(Object.keys(io.sockets.adapter.rooms.get(roomId) || {}));
-
-        for (const member of room.members) {
-            if (!onlineUsers.has(member._id.toString()) && member._id.toString() !== socket.userId) {
-                await User.findByIdAndUpdate(member._id, {
-                    $inc: { [`unreadCounts.${roomId}`]: 1 }
-                });
+        // If this is a reply, update the original message's reply chain
+        if (replyTo) {
+            const originalMessage = await Message.findById(replyTo);
+            if (originalMessage) {
+                await originalMessage.addReply(message._id);
             }
         }
 
+        // Emit the message to all users in the room
+        socket.to(roomId).emit('message', {
+            type: 'new',
+            message
+        });
+
+        // Acknowledge the message
+        socket.emit('message', {
+            type: 'sent',
+            message
+        });
+
     } catch (error) {
         console.error('Error handling message:', error);
-        socket.emit('error', { message: 'Failed to send message' });
+        socket.emit('error', {
+            type: 'message',
+            message: error.message
+        });
     }
-};
+}
 
-const handleTyping = (io, socket, data) => {
-    const { roomId, isTyping } = data;
-    socket.to(roomId).emit('typing', {
-        userId: socket.userId,
-        username: socket.username,
-        isTyping
-    });
-};
+async function handleReaction(socket, data) {
+    try {
+        const { messageId, emoji, remove } = data;
+        const userId = socket.user._id;
 
-const handlePin = async (io, socket, data) => {
+        const message = await Message.findById(messageId);
+        if (!message) {
+            throw new Error('Message not found');
+        }
+
+        if (remove) {
+            await message.removeReaction(emoji, userId);
+        } else {
+            await message.addReaction(emoji, userId);
+        }
+
+        // Emit the updated reactions to all users in the room
+        socket.to(message.roomId).emit('message', {
+            type: 'reaction',
+            messageId: message._id,
+            reactions: message.reactions
+        });
+
+        // Acknowledge the reaction update
+        socket.emit('message', {
+            type: 'reaction',
+            messageId: message._id,
+            reactions: message.reactions
+        });
+
+    } catch (error) {
+        console.error('Error handling reaction:', error);
+        socket.emit('error', {
+            type: 'reaction',
+            message: error.message
+        });
+    }
+}
+
+async function handleScheduledMessage(socket, data) {
+    try {
+        const { messageId, action, scheduledFor } = data;
+        const userId = socket.user._id;
+
+        if (action === 'cancel') {
+            const cancelled = await messageScheduler.cancelScheduledMessage(messageId);
+            if (cancelled) {
+                socket.emit('message', {
+                    type: 'schedule_cancelled',
+                    messageId
+                });
+            }
+        } else if (action === 'reschedule') {
+            const message = await Message.findById(messageId);
+            if (message && message.userId.equals(userId)) {
+                await message.schedule(new Date(scheduledFor));
+                socket.emit('message', {
+                    type: 'rescheduled',
+                    message
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error handling scheduled message:', error);
+        socket.emit('error', {
+            type: 'scheduled_message',
+            message: error.message
+        });
+    }
+}
+
+async function handleReply(socket, data) {
     try {
         const { messageId } = data;
-        const message = await Message.findById(messageId);
+        const message = await Message.findById(messageId)
+            .populate('replyTo')
+            .populate('replyChain');
 
         if (!message) {
             throw new Error('Message not found');
         }
 
-        await message.pin(socket.userId);
-        io.to(message.roomId).emit('messagePinned', {
-            messageId,
-            pinnedBy: socket.userId,
-            pinnedAt: message.pinnedAt
-        });
-    } catch (error) {
-        console.error('Error pinning message:', error);
-        socket.emit('error', { message: 'Failed to pin message' });
-    }
-};
-
-const handleUnpin = async (io, socket, data) => {
-    try {
-        const { messageId } = data;
-        const message = await Message.findById(messageId);
-
-        if (!message) {
-            throw new Error('Message not found');
-        }
-
-        await message.unpin();
-        io.to(message.roomId).emit('messageUnpinned', { messageId });
-    } catch (error) {
-        console.error('Error unpinning message:', error);
-        socket.emit('error', { message: 'Failed to unpin message' });
-    }
-};
-
-const handleEdit = async (io, socket, data) => {
-    try {
-        const { messageId, content } = data;
-        const message = await Message.findById(messageId);
-
-        if (!message) {
-            throw new Error('Message not found');
-        }
-
-        if (message.userId.toString() !== socket.userId) {
-            throw new Error('Unauthorized to edit this message');
-        }
-
-        await message.edit(content, socket.userId);
-        io.to(message.roomId).emit('messageEdited', {
-            messageId,
-            content,
-            editedAt: message.updatedAt
-        });
-    } catch (error) {
-        console.error('Error editing message:', error);
-        socket.emit('error', { message: 'Failed to edit message' });
-    }
-};
-
-const handleDelete = async (io, socket, data) => {
-    try {
-        const { messageId } = data;
-        const message = await Message.findById(messageId);
-
-        if (!message) {
-            throw new Error('Message not found');
-        }
-
-        if (message.userId.toString() !== socket.userId) {
-            throw new Error('Unauthorized to delete this message');
-        }
-
-        await message.softDelete(socket.userId);
-        io.to(message.roomId).emit('messageDeleted', {
-            messageId,
-            deletedAt: message.deletedAt
-        });
-    } catch (error) {
-        console.error('Error deleting message:', error);
-        socket.emit('error', { message: 'Failed to delete message' });
-    }
-};
-
-const handleMarkRead = async (io, socket, data) => {
-    try {
-        const { messageId } = data;
-        const message = await Message.findById(messageId);
-
-        if (!message) {
-            throw new Error('Message not found');
-        }
-
-        await message.markAsRead(socket.userId);
-
-        // Update user's unread count for the room
-        await User.findByIdAndUpdate(socket.userId, {
-            $inc: { [`unreadCounts.${message.roomId}`]: -1 }
+        socket.emit('message', {
+            type: 'reply_chain',
+            message
         });
 
-        socket.to(message.roomId).emit('messageRead', {
-            messageId,
-            userId: socket.userId,
-            readAt: new Date()
-        });
     } catch (error) {
-        console.error('Error marking message as read:', error);
-        socket.emit('error', { message: 'Failed to mark message as read' });
-    }
-};
-
-// New handler for setting message expiration
-const handleSetExpiration = async (io, socket, data) => {
-    try {
-        const { messageId, expirationMinutes } = data;
-        const message = await Message.findById(messageId);
-
-        if (!message) {
-            throw new Error('Message not found');
-        }
-
-        if (message.userId.toString() !== socket.userId) {
-            throw new Error('Unauthorized to set message expiration');
-        }
-
-        await message.setExpiration(expirationMinutes);
-        io.to(message.roomId).emit('messageExpirationSet', {
-            messageId,
-            expiresAt: message.expiresAt
+        console.error('Error handling reply:', error);
+        socket.emit('error', {
+            type: 'reply',
+            message: error.message
         });
-    } catch (error) {
-        console.error('Error setting message expiration:', error);
-        socket.emit('error', { message: 'Failed to set message expiration' });
     }
-};
+}
 
 module.exports = {
     handleMessage,
-    handleTyping,
-    handlePin,
-    handleUnpin,
-    handleEdit,
-    handleDelete,
-    handleMarkRead,
-    handleSetExpiration
+    handleReaction,
+    handleScheduledMessage,
+    handleReply
 }; 
