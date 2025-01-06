@@ -62,8 +62,54 @@ const ChatRoom = ({
             });
 
             // Listen for new messages
-            socket.on('newMessage', (message) => {
+            socket.on('message', (message) => {
                 setMessages(prev => [...prev, message]);
+            });
+
+            // Listen for voice messages
+            socket.on('voiceMessage', ({ messageId, duration }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, metadata: { ...msg.metadata, duration } }
+                        : msg
+                ));
+            });
+
+            // Listen for GIF messages
+            socket.on('gifMessage', ({ messageId, dimensions }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, metadata: { ...msg.metadata, ...dimensions } }
+                        : msg
+                ));
+            });
+
+            // Listen for message reactions
+            socket.on('messageReaction', ({ messageId, emoji, action, userId, username }) => {
+                setMessages(prev => prev.map(msg => {
+                    if (msg._id === messageId) {
+                        const reactions = [...(msg.reactions || [])];
+                        const reactionIndex = reactions.findIndex(r => r.emoji === emoji);
+
+                        if (action === 'add') {
+                            if (reactionIndex === -1) {
+                                reactions.push({ emoji, users: [{ _id: userId, username }] });
+                            } else if (!reactions[reactionIndex].users.some(u => u._id === userId)) {
+                                reactions[reactionIndex].users.push({ _id: userId, username });
+                            }
+                        } else {
+                            if (reactionIndex !== -1) {
+                                reactions[reactionIndex].users = reactions[reactionIndex].users.filter(u => u._id !== userId);
+                                if (reactions[reactionIndex].users.length === 0) {
+                                    reactions.splice(reactionIndex, 1);
+                                }
+                            }
+                        }
+
+                        return { ...msg, reactions };
+                    }
+                    return msg;
+                }));
             });
 
             // Listen for member updates
@@ -73,18 +119,30 @@ const ChatRoom = ({
 
             return () => {
                 socket.emit('leaveRoom', { roomId });
-                socket.off('newMessage');
+                socket.off('message');
+                socket.off('voiceMessage');
+                socket.off('gifMessage');
+                socket.off('messageReaction');
                 socket.off('memberUpdate');
             };
         }
     }, [socket, roomId]);
 
-    const handleSendMessage = (message) => {
-        if (socket && message.trim()) {
-            socket.emit('sendMessage', {
+    const handleSendMessage = (messageData) => {
+        if (socket) {
+            // Ensure message data has the required fields
+            const message = {
                 roomId,
-                message,
-                type: 'text'
+                type: messageData.type || 'text',
+                content: messageData.content,
+                metadata: messageData.metadata || {}
+            };
+
+            // Send message through socket
+            socket.emit('sendMessage', message, (response) => {
+                if (!response.success) {
+                    setError('Failed to send message');
+                }
             });
         }
     };

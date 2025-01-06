@@ -19,7 +19,10 @@ const ChatInput = ({ onSendMessage }) => {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (message.trim()) {
-            onSendMessage({ type: 'text', content: message });
+            onSendMessage({
+                type: 'text',
+                content: message.trim()
+            });
             setMessage('');
         }
     };
@@ -30,7 +33,8 @@ const ChatInput = ({ onSendMessage }) => {
             content: gif.url,
             metadata: {
                 width: gif.width,
-                height: gif.height
+                height: gif.height,
+                title: gif.title
             }
         });
         setGifAnchorEl(null);
