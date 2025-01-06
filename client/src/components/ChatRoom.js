@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Box,
     Typography,
@@ -17,33 +17,48 @@ import {
     Tooltip,
     Menu,
     MenuItem,
-    Divider
+    Divider,
+    Switch,
+    FormControlLabel,
+    Snackbar,
+    Alert
 } from '@mui/material';
 import {
     Settings as SettingsIcon,
     PersonAdd as InviteIcon,
     ExitToApp as LeaveIcon,
     MoreVert as MoreIcon,
-    Delete as DeleteIcon
+    Delete as DeleteIcon,
+    Notifications as NotificationsIcon,
+    NotificationsOff as NotificationsOffIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
+import PinnedMessages from './PinnedMessages';
+import TypingIndicator from './TypingIndicator';
 
 const ChatRoom = ({
     roomId,
     onLeaveRoom,
-    socket,
     onClose
 }) => {
     const { user } = useAuth();
+    const { socket } = useSocket();
     const [room, setRoom] = useState(null);
     const [messages, setMessages] = useState([]);
+    const [pinnedMessages, setPinnedMessages] = useState([]);
     const [members, setMembers] = useState([]);
+    const [typingUsers, setTypingUsers] = useState([]);
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
     const [settingsAnchorEl, setSettingsAnchorEl] = useState(null);
     const [error, setError] = useState('');
+    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const typingTimeoutRef = useRef({});
+    const notificationSound = useRef(new Audio('/notification.mp3'));
 
     useEffect(() => {
         if (socket && roomId) {
@@ -56,6 +71,8 @@ const ChatRoom = ({
                     setRoom(response.room);
                     setMembers(response.members);
                     setMessages(response.messages);
+                    setPinnedMessages(response.messages.filter(m => m.isPinned));
+                    setUnreadCount(response.unreadCount || 0);
                 } else {
                     setError('Failed to load room data');
                 }
@@ -64,6 +81,10 @@ const ChatRoom = ({
             // Listen for new messages
             socket.on('message', (message) => {
                 setMessages(prev => [...prev, message]);
+                if (notificationsEnabled && message.userId !== user._id) {
+                    notificationSound.current.play().catch(console.error);
+                    setUnreadCount(prev => prev + 1);
+                }
             });
 
             // Listen for voice messages
@@ -84,32 +105,80 @@ const ChatRoom = ({
                 ));
             });
 
-            // Listen for message reactions
-            socket.on('messageReaction', ({ messageId, emoji, action, userId, username }) => {
-                setMessages(prev => prev.map(msg => {
-                    if (msg._id === messageId) {
-                        const reactions = [...(msg.reactions || [])];
-                        const reactionIndex = reactions.findIndex(r => r.emoji === emoji);
+            // Listen for file messages
+            socket.on('fileMessage', ({ messageId, fileName, fileSize, fileType }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, metadata: { ...msg.metadata, fileName, fileSize, fileType } }
+                        : msg
+                ));
+            });
 
-                        if (action === 'add') {
-                            if (reactionIndex === -1) {
-                                reactions.push({ emoji, users: [{ _id: userId, username }] });
-                            } else if (!reactions[reactionIndex].users.some(u => u._id === userId)) {
-                                reactions[reactionIndex].users.push({ _id: userId, username });
-                            }
-                        } else {
-                            if (reactionIndex !== -1) {
-                                reactions[reactionIndex].users = reactions[reactionIndex].users.filter(u => u._id !== userId);
-                                if (reactions[reactionIndex].users.length === 0) {
-                                    reactions.splice(reactionIndex, 1);
-                                }
-                            }
-                        }
+            // Listen for message pins
+            socket.on('messagePinned', ({ messageId, pinnedBy, pinnedAt }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, isPinned: true, pinnedBy, pinnedAt }
+                        : msg
+                ));
+                setPinnedMessages(prev => [...prev, messages.find(m => m._id === messageId)]);
+            });
 
-                        return { ...msg, reactions };
+            socket.on('messageUnpinned', ({ messageId }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, isPinned: false, pinnedBy: null, pinnedAt: null }
+                        : msg
+                ));
+                setPinnedMessages(prev => prev.filter(m => m._id !== messageId));
+            });
+
+            // Listen for message edits
+            socket.on('messageEdited', ({ messageId, content, editedAt }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, content, isEdited: true, editedAt }
+                        : msg
+                ));
+                setPinnedMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, content, isEdited: true, editedAt }
+                        : msg
+                ));
+            });
+
+            // Listen for message deletions
+            socket.on('messageDeleted', ({ messageId, deletedAt }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? { ...msg, isDeleted: true, deletedAt }
+                        : msg
+                ));
+                setPinnedMessages(prev => prev.filter(m => m._id !== messageId));
+            });
+
+            // Listen for typing indicators
+            socket.on('typing', ({ userId, username, isTyping }) => {
+                setTypingUsers(prev => {
+                    if (isTyping && !prev.includes(username)) {
+                        return [...prev, username];
+                    } else if (!isTyping) {
+                        return prev.filter(u => u !== username);
                     }
-                    return msg;
-                }));
+                    return prev;
+                });
+            });
+
+            // Listen for message read status
+            socket.on('messageRead', ({ messageId, userId, readAt }) => {
+                setMessages(prev => prev.map(msg =>
+                    msg._id === messageId
+                        ? {
+                            ...msg,
+                            readBy: [...(msg.readBy || []), { user: userId, readAt }]
+                        }
+                        : msg
+                ));
             });
 
             // Listen for member updates
@@ -122,11 +191,17 @@ const ChatRoom = ({
                 socket.off('message');
                 socket.off('voiceMessage');
                 socket.off('gifMessage');
-                socket.off('messageReaction');
+                socket.off('fileMessage');
+                socket.off('messagePinned');
+                socket.off('messageUnpinned');
+                socket.off('messageEdited');
+                socket.off('messageDeleted');
+                socket.off('typing');
+                socket.off('messageRead');
                 socket.off('memberUpdate');
             };
         }
-    }, [socket, roomId]);
+    }, [socket, roomId, user._id, notificationsEnabled]);
 
     const handleSendMessage = (messageData) => {
         if (socket) {
@@ -144,6 +219,24 @@ const ChatRoom = ({
                     setError('Failed to send message');
                 }
             });
+        }
+    };
+
+    const handleTyping = (isTyping) => {
+        if (socket) {
+            // Clear existing timeout
+            if (typingTimeoutRef.current[roomId]) {
+                clearTimeout(typingTimeoutRef.current[roomId]);
+            }
+
+            socket.emit('typing', { roomId, isTyping });
+
+            // Set timeout to stop typing indicator after 3 seconds
+            if (isTyping) {
+                typingTimeoutRef.current[roomId] = setTimeout(() => {
+                    socket.emit('typing', { roomId, isTyping: false });
+                }, 3000);
+            }
         }
     };
 
@@ -187,6 +280,10 @@ const ChatRoom = ({
         }
     };
 
+    const toggleNotifications = () => {
+        setNotificationsEnabled(!notificationsEnabled);
+    };
+
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* Room Header */}
@@ -198,10 +295,31 @@ const ChatRoom = ({
                 borderBottom: 1,
                 borderColor: 'divider'
             }}>
-                <Typography variant="h6">
-                    {room?.name || 'Loading...'}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="h6">
+                        {room?.name || 'Loading...'}
+                    </Typography>
+                    {unreadCount > 0 && (
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                backgroundColor: 'primary.main',
+                                color: 'white',
+                                px: 1,
+                                py: 0.5,
+                                borderRadius: 1
+                            }}
+                        >
+                            {unreadCount} unread
+                        </Typography>
+                    )}
+                </Box>
                 <Box>
+                    <Tooltip title={notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}>
+                        <IconButton onClick={toggleNotifications}>
+                            {notificationsEnabled ? <NotificationsIcon /> : <NotificationsOffIcon />}
+                        </IconButton>
+                    </Tooltip>
                     <Tooltip title="Invite Member">
                         <IconButton onClick={() => setInviteDialogOpen(true)}>
                             <InviteIcon />
@@ -221,8 +339,15 @@ const ChatRoom = ({
             }}>
                 {/* Messages Area */}
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <PinnedMessages messages={pinnedMessages} roomId={roomId} />
                     <MessageList messages={messages} />
-                    <MessageInput onSendMessage={handleSendMessage} />
+                    <Box sx={{ position: 'relative' }}>
+                        <TypingIndicator typingUsers={typingUsers} />
+                        <MessageInput
+                            onSendMessage={handleSendMessage}
+                            onTyping={handleTyping}
+                        />
+                    </Box>
                 </Box>
 
                 {/* Members Sidebar */}
@@ -262,17 +387,13 @@ const ChatRoom = ({
                 onClose={() => setSettingsAnchorEl(null)}
             >
                 <MenuItem onClick={handleLeaveRoom}>
-                    <ListItemAvatar>
-                        <LeaveIcon />
-                    </ListItemAvatar>
                     <ListItemText primary="Leave Room" />
+                    <LeaveIcon sx={{ ml: 1 }} />
                 </MenuItem>
                 {room?.ownerId === user.id && (
                     <MenuItem onClick={handleDeleteRoom}>
-                        <ListItemAvatar>
-                            <DeleteIcon />
-                        </ListItemAvatar>
                         <ListItemText primary="Delete Room" />
+                        <DeleteIcon sx={{ ml: 1 }} />
                     </MenuItem>
                 )}
             </Menu>
@@ -298,6 +419,18 @@ const ChatRoom = ({
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Error Snackbar */}
+            <Snackbar
+                open={Boolean(error)}
+                autoHideDuration={6000}
+                onClose={() => setError('')}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+                <Alert onClose={() => setError('')} severity="error">
+                    {error}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

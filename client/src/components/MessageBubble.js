@@ -1,8 +1,20 @@
 import React, { useState, useRef } from 'react';
-import { Paper, Typography, Box, IconButton, Slider } from '@mui/material';
-import { PlayArrow as PlayIcon, Pause as PauseIcon } from '@mui/icons-material';
-import { motion } from 'framer-motion';
+import { Paper, Typography, Box, IconButton, Slider, Menu, MenuItem, TextField } from '@mui/material';
+import {
+    PlayArrow as PlayIcon,
+    Pause as PauseIcon,
+    MoreVert as MoreVertIcon,
+    PushPin as PinIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Check as CheckIcon,
+    Close as CloseIcon,
+    Download as DownloadIcon
+} from '@mui/icons-material';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
+import { format } from 'date-fns';
 
 const bubbleVariants = {
     modern: {
@@ -24,11 +36,15 @@ const bubbleVariants = {
 
 const MessageBubble = ({ message, isOwn }) => {
     const { user } = useAuth();
+    const { socket } = useSocket();
     const bubbleStyle = user.preferences?.bubbleStyle || 'modern';
     const messageColor = user.preferences?.messageColor || '#7C4DFF';
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [anchorEl, setAnchorEl] = useState(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState(message.content);
     const audioRef = useRef(new Audio());
 
     const formatTime = (seconds) => {
@@ -49,6 +65,50 @@ const MessageBubble = ({ message, isOwn }) => {
                 });
                 setIsPlaying(true);
             }
+        }
+    };
+
+    const handleMenuOpen = (event) => {
+        setAnchorEl(event.currentTarget);
+    };
+
+    const handleMenuClose = () => {
+        setAnchorEl(null);
+    };
+
+    const handlePin = () => {
+        socket.emit('pin', { messageId: message._id });
+        handleMenuClose();
+    };
+
+    const handleUnpin = () => {
+        socket.emit('unpin', { messageId: message._id });
+        handleMenuClose();
+    };
+
+    const handleEdit = () => {
+        setIsEditing(true);
+        handleMenuClose();
+    };
+
+    const handleDelete = () => {
+        socket.emit('delete', { messageId: message._id });
+        handleMenuClose();
+    };
+
+    const handleSaveEdit = () => {
+        socket.emit('edit', { messageId: message._id, content: editContent });
+        setIsEditing(false);
+    };
+
+    const handleCancelEdit = () => {
+        setEditContent(message.content);
+        setIsEditing(false);
+    };
+
+    const handleDownload = () => {
+        if (message.type === 'file') {
+            window.open(message.fileUrl, '_blank');
         }
     };
 
@@ -83,6 +143,84 @@ const MessageBubble = ({ message, isOwn }) => {
         }
     }, [message.content, message.type]);
 
+    React.useEffect(() => {
+        // Mark message as read when it becomes visible
+        if (!isOwn && !message.readBy?.some(read => read.user === user._id)) {
+            socket.emit('markRead', { messageId: message._id });
+        }
+    }, [message._id, isOwn, user._id, message.readBy]);
+
+    const renderContent = () => {
+        if (message.isDeleted) {
+            return (
+                <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                    This message has been deleted
+                </Typography>
+            );
+        }
+
+        if (isEditing) {
+            return (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <TextField
+                        fullWidth
+                        multiline
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        variant="outlined"
+                        size="small"
+                    />
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                        <IconButton size="small" onClick={handleSaveEdit}>
+                            <CheckIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={handleCancelEdit}>
+                            <CloseIcon fontSize="small" />
+                        </IconButton>
+                    </Box>
+                </Box>
+            );
+        }
+
+        switch (message.type) {
+            case 'text':
+                return <Typography>{message.content}</Typography>;
+            case 'gif':
+                return <img src={message.content} alt="GIF" style={{ maxWidth: '100%', borderRadius: '8px' }} />;
+            case 'voice':
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        <IconButton onClick={handlePlayPause} size="small">
+                            {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                        </IconButton>
+                        <Slider
+                            size="small"
+                            value={currentTime}
+                            max={duration}
+                            onChange={(_, value) => {
+                                audioRef.current.currentTime = value;
+                            }}
+                            sx={{ flexGrow: 1 }}
+                        />
+                        <Typography variant="caption">
+                            {formatTime(currentTime)} / {formatTime(duration)}
+                        </Typography>
+                    </Box>
+                );
+            case 'file':
+                return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography>{message.fileName}</Typography>
+                        <IconButton size="small" onClick={handleDownload}>
+                            <DownloadIcon fontSize="small" />
+                        </IconButton>
+                    </Box>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
@@ -95,135 +233,94 @@ const MessageBubble = ({ message, isOwn }) => {
             style={{
                 alignSelf: isOwn ? 'flex-end' : 'flex-start',
                 maxWidth: message.type === 'gif' ? '300px' : '70%',
-                marginBottom: '8px'
+                marginBottom: '8px',
+                position: 'relative'
             }}
         >
             <Paper
-                elevation={bubbleStyle === 'minimal' ? 0 : 2}
+                elevation={1}
                 sx={{
                     ...bubbleVariants[bubbleStyle],
-                    background: isOwn
-                        ? `linear-gradient(145deg, ${messageColor}CC, ${messageColor}99)`
-                        : 'rgba(19, 47, 76, 0.4)',
-                    color: isOwn ? '#fff' : 'inherit',
-                    overflow: 'hidden'
+                    backgroundColor: isOwn ? messageColor : 'background.paper',
+                    color: isOwn ? 'white' : 'text.primary',
+                    position: 'relative'
                 }}
             >
-                {message.type === 'gif' ? (
-                    <Box
+                {message.isPinned && (
+                    <PinIcon
                         sx={{
-                            position: 'relative',
-                            width: '100%',
-                            '&:hover': {
-                                '& .gif-overlay': {
-                                    opacity: 1
-                                }
-                            }
+                            position: 'absolute',
+                            top: -12,
+                            right: -12,
+                            transform: 'rotate(45deg)',
+                            color: 'primary.main',
+                            fontSize: 20
                         }}
-                    >
-                        <Box
-                            component="img"
-                            src={message.content}
-                            alt="GIF"
-                            loading="lazy"
-                            sx={{
-                                width: '100%',
-                                height: 'auto',
-                                maxHeight: '300px',
-                                objectFit: 'contain',
-                                borderRadius: bubbleStyle === 'modern' ? '12px' : '4px',
-                                display: 'block'
-                            }}
-                        />
-                        <Box
-                            className="gif-overlay"
-                            sx={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                background: 'rgba(0,0,0,0.3)',
-                                opacity: 0,
-                                transition: 'opacity 0.2s ease-in-out',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: bubbleStyle === 'modern' ? '12px' : '4px'
-                            }}
-                        >
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: 'white',
-                                    backgroundColor: 'rgba(0,0,0,0.5)',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px'
-                                }}
-                            >
-                                GIF
-                            </Typography>
-                        </Box>
-                    </Box>
-                ) : message.type === 'voice' ? (
-                    <Box sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        minWidth: 250,
-                        p: 1,
-                        borderRadius: bubbleStyle === 'modern' ? '12px' : '4px',
-                        background: isOwn ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-                    }}>
-                        <IconButton
-                            size="small"
-                            onClick={handlePlayPause}
-                            sx={{
-                                color: isOwn ? 'white' : 'inherit',
-                                '&:hover': {
-                                    background: isOwn ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)'
-                                }
-                            }}
-                        >
-                            {isPlaying ? <PauseIcon /> : <PlayIcon />}
-                        </IconButton>
-                        <Box sx={{ flexGrow: 1, mx: 1 }}>
-                            <Slider
-                                size="small"
-                                value={currentTime}
-                                max={duration || 0}
-                                onChange={(_, value) => {
-                                    audioRef.current.currentTime = value;
-                                    setCurrentTime(value);
-                                }}
-                                sx={{
-                                    color: isOwn ? 'white' : 'primary.main',
-                                    '& .MuiSlider-thumb': {
-                                        width: 12,
-                                        height: 12,
-                                    },
-                                    '& .MuiSlider-rail': {
-                                        opacity: 0.3,
-                                    }
-                                }}
-                            />
-                        </Box>
-                        <Typography
-                            variant="caption"
-                            sx={{
-                                minWidth: 45,
-                                color: isOwn ? 'rgba(255, 255, 255, 0.8)' : 'inherit'
-                            }}
-                        >
-                            {formatTime(currentTime)} / {formatTime(duration)}
-                        </Typography>
-                    </Box>
-                ) : (
-                    <Typography variant="body1">
-                        {message.content}
-                    </Typography>
+                    />
                 )}
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 'medium' }}>
+                        {message.username}
+                    </Typography>
+                    <IconButton size="small" onClick={handleMenuOpen}>
+                        <MoreVertIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+
+                {renderContent()}
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
+                        {format(new Date(message.createdAt), 'HH:mm')}
+                        {message.isEdited && ' (edited)'}
+                    </Typography>
+                    {!isOwn && message.readBy?.length > 0 && (
+                        <Typography variant="caption" sx={{ color: isOwn ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
+                            Read by {message.readBy.length}
+                        </Typography>
+                    )}
+                </Box>
             </Paper>
+
+            <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                }}
+            >
+                {message.isPinned ? (
+                    <MenuItem onClick={handleUnpin}>
+                        <PinIcon sx={{ mr: 1 }} /> Unpin Message
+                    </MenuItem>
+                ) : (
+                    <MenuItem onClick={handlePin}>
+                        <PinIcon sx={{ mr: 1 }} /> Pin Message
+                    </MenuItem>
+                )}
+                {isOwn && !message.isDeleted && (
+                    <>
+                        <MenuItem onClick={handleEdit}>
+                            <EditIcon sx={{ mr: 1 }} /> Edit Message
+                        </MenuItem>
+                        <MenuItem onClick={handleDelete}>
+                            <DeleteIcon sx={{ mr: 1 }} /> Delete Message
+                        </MenuItem>
+                    </>
+                )}
+                {message.type === 'file' && (
+                    <MenuItem onClick={handleDownload}>
+                        <DownloadIcon sx={{ mr: 1 }} /> Download File
+                    </MenuItem>
+                )}
+            </Menu>
         </motion.div>
     );
 };

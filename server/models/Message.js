@@ -51,6 +51,54 @@ const messageSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Message'
     },
+    editHistory: [{
+        content: String,
+        editedAt: {
+            type: Date,
+            default: Date.now
+        },
+        editedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        }
+    }],
+    isEdited: {
+        type: Boolean,
+        default: false
+    },
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
+    deletedAt: {
+        type: Date
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    fileUrl: {
+        type: String
+    },
+    fileName: {
+        type: String
+    },
+    fileSize: {
+        type: Number
+    },
+    fileType: {
+        type: String
+    },
+    readBy: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        readAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
     createdAt: {
         type: Date,
         default: Date.now
@@ -71,6 +119,8 @@ messageSchema.index({ roomId: 1, createdAt: -1 });
 messageSchema.index({ roomId: 1, isPinned: 1 });
 messageSchema.index({ userId: 1 });
 messageSchema.index({ 'reactions.users': 1 });
+messageSchema.index({ 'readBy.user': 1 });
+messageSchema.index({ isDeleted: 1 });
 
 // Methods
 messageSchema.methods.pin = async function (userId) {
@@ -85,6 +135,36 @@ messageSchema.methods.unpin = async function () {
     this.pinnedBy = null;
     this.pinnedAt = null;
     await this.save();
+};
+
+messageSchema.methods.edit = async function (newContent, userId) {
+    // Store the current content in edit history
+    this.editHistory.push({
+        content: this.content,
+        editedAt: new Date(),
+        editedBy: userId
+    });
+    this.content = newContent;
+    this.isEdited = true;
+    await this.save();
+};
+
+messageSchema.methods.softDelete = async function (userId) {
+    this.isDeleted = true;
+    this.deletedAt = new Date();
+    this.deletedBy = userId;
+    await this.save();
+};
+
+messageSchema.methods.markAsRead = async function (userId) {
+    const existingRead = this.readBy.find(read => read.user.toString() === userId.toString());
+    if (!existingRead) {
+        this.readBy.push({
+            user: userId,
+            readAt: new Date()
+        });
+        await this.save();
+    }
 };
 
 messageSchema.methods.addReaction = async function (emoji, userId) {

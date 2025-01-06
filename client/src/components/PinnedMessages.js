@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
     Box,
-    Paper,
     Typography,
     IconButton,
     List,
@@ -9,183 +8,108 @@ import {
     ListItemText,
     ListItemSecondaryAction,
     Collapse,
-    Tooltip,
-    Badge,
-    Divider
+    Paper
 } from '@mui/material';
 import {
     PushPin as PinIcon,
-    ExpandMore as ExpandMoreIcon,
-    ExpandLess as ExpandLessIcon,
-    UnfoldMore as UnfoldMoreIcon,
-    Delete as DeleteIcon
+    KeyboardArrowDown as ExpandIcon,
+    KeyboardArrowUp as CollapseIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../contexts/AuthContext';
+import { format } from 'date-fns';
+import { useSocket } from '../contexts/SocketContext';
 
-const PinnedMessages = ({
-    messages = [],
-    onUnpin,
-    onMessageClick,
-    expanded = false,
-    onToggle
-}) => {
-    const { user: currentUser } = useAuth();
-    const [hoveredMessage, setHoveredMessage] = useState(null);
+const PinnedMessages = ({ messages, roomId }) => {
+    const [expanded, setExpanded] = React.useState(true);
+    const { socket } = useSocket();
 
-    const handleUnpin = (messageId, event) => {
-        event.stopPropagation();
-        onUnpin(messageId);
+    const handleUnpin = (messageId) => {
+        socket.emit('unpin', { messageId });
     };
 
-    const formatTimestamp = (timestamp) => {
-        const date = new Date(timestamp);
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    const renderMessageContent = (message) => {
+        switch (message.type) {
+            case 'text':
+                return message.content;
+            case 'gif':
+                return '[GIF]';
+            case 'voice':
+                return '[Voice Message]';
+            case 'file':
+                return `[File: ${message.fileName}]`;
+            default:
+                return '';
+        }
     };
 
-    const truncateText = (text, maxLength = 100) => {
-        if (text.length <= maxLength) return text;
-        return text.substring(0, maxLength) + '...';
-    };
+    if (!messages || messages.length === 0) return null;
 
     return (
         <Paper
-            variant="outlined"
+            elevation={1}
             sx={{
-                bgcolor: 'background.paper',
+                position: 'sticky',
+                top: 0,
+                zIndex: 2,
+                backgroundColor: 'background.paper',
                 borderRadius: 2,
-                overflow: 'hidden'
+                mb: 2
             }}
         >
             <Box
                 sx={{
-                    p: 2,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    '&:hover': {
-                        bgcolor: 'action.hover'
-                    }
+                    p: 1,
+                    borderBottom: expanded ? 1 : 0,
+                    borderColor: 'divider',
+                    cursor: 'pointer'
                 }}
-                onClick={onToggle}
+                onClick={() => setExpanded(!expanded)}
             >
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Badge
-                        badgeContent={messages.length}
-                        color="primary"
-                        sx={{ mr: 2 }}
-                    >
-                        <PinIcon color="action" />
-                    </Badge>
-                    <Typography variant="subtitle1">
-                        Pinned Messages
-                    </Typography>
-                </Box>
-                <IconButton
-                    size="small"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggle();
-                    }}
-                >
-                    {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                <PinIcon sx={{ mr: 1 }} />
+                <Typography variant="subtitle2">
+                    Pinned Messages ({messages.length})
+                </Typography>
+                <IconButton size="small" sx={{ ml: 'auto' }}>
+                    {expanded ? <CollapseIcon /> : <ExpandIcon />}
                 </IconButton>
             </Box>
 
             <Collapse in={expanded}>
-                <Divider />
-                <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+                <List dense>
                     <AnimatePresence>
-                        {messages.map((message, index) => (
+                        {messages.map((message) => (
                             <motion.div
-                                key={message.id}
-                                initial={{ opacity: 0, y: -20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -20 }}
-                                transition={{
-                                    type: 'spring',
-                                    stiffness: 500,
-                                    damping: 30,
-                                    delay: index * 0.1
-                                }}
+                                key={message._id}
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
                             >
-                                <ListItem
-                                    button
-                                    onClick={() => onMessageClick(message)}
-                                    onMouseEnter={() => setHoveredMessage(message.id)}
-                                    onMouseLeave={() => setHoveredMessage(null)}
-                                    sx={{
-                                        transition: 'background-color 0.2s',
-                                        '&:hover': {
-                                            bgcolor: 'action.hover'
-                                        }
-                                    }}
-                                >
+                                <ListItem>
                                     <ListItemText
                                         primary={
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="body1" component="span">
-                                                    {message.username}
-                                                </Typography>
-                                                <Typography
-                                                    variant="caption"
-                                                    color="text.secondary"
-                                                    component="span"
-                                                >
-                                                    {formatTimestamp(message.pinnedAt)}
-                                                </Typography>
-                                            </Box>
+                                            <Typography variant="body2" noWrap>
+                                                {renderMessageContent(message)}
+                                            </Typography>
                                         }
                                         secondary={
-                                            <Typography
-                                                variant="body2"
-                                                color="text.secondary"
-                                                sx={{
-                                                    display: '-webkit-box',
-                                                    WebkitLineClamp: 2,
-                                                    WebkitBoxOrient: 'vertical',
-                                                    overflow: 'hidden'
-                                                }}
-                                            >
-                                                {message.type === 'text'
-                                                    ? truncateText(message.text)
-                                                    : '[GIF]'}
+                                            <Typography variant="caption" color="text.secondary">
+                                                {message.username} • {format(new Date(message.createdAt), 'MMM d, HH:mm')}
                                             </Typography>
                                         }
                                     />
                                     <ListItemSecondaryAction>
-                                        <Tooltip title="Go to message">
-                                            <IconButton
-                                                edge="end"
-                                                size="small"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onMessageClick(message);
-                                                }}
-                                                sx={{ mr: 1 }}
-                                            >
-                                                <UnfoldMoreIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                        {(currentUser?.id === message.pinnedBy ||
-                                            currentUser?.isAdmin) && (
-                                                <Tooltip title="Unpin message">
-                                                    <IconButton
-                                                        edge="end"
-                                                        size="small"
-                                                        onClick={(e) => handleUnpin(message.id, e)}
-                                                        color="error"
-                                                    >
-                                                        <DeleteIcon />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            )}
+                                        <IconButton
+                                            edge="end"
+                                            size="small"
+                                            onClick={() => handleUnpin(message._id)}
+                                        >
+                                            <PinIcon fontSize="small" />
+                                        </IconButton>
                                     </ListItemSecondaryAction>
                                 </ListItem>
-                                {index < messages.length - 1 && (
-                                    <Divider component="li" />
-                                )}
                             </motion.div>
                         ))}
                     </AnimatePresence>
