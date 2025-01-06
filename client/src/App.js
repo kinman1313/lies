@@ -6,6 +6,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Chat from './components/Chat';
 import ResetPassword from './components/ResetPassword';
+import NewPassword from './components/NewPassword';
 
 // Protected Route Component
 const PrivateRoute = ({ children }) => {
@@ -39,6 +40,11 @@ function App() {
                         <Route path="/reset-password" element={
                             <PublicRoute>
                                 <ResetPassword />
+                            </PublicRoute>
+                        } />
+                        <Route path="/reset-password/:token" element={
+                            <PublicRoute>
+                                <NewPassword />
                             </PublicRoute>
                         } />
                         <Route path="/chat" element={
