@@ -122,10 +122,15 @@ const UserProfile = ({
         }
     };
 
-    const handleSaveAvatar = () => {
+    const handleSaveAvatar = async () => {
         if (newAvatar && onUpdateAvatar) {
             try {
-                onUpdateAvatar(newAvatar);
+                await onUpdateAvatar(newAvatar);
+                // Update the local avatar preview immediately
+                user.profile = {
+                    ...user.profile,
+                    avatar: { url: newAvatar }
+                };
                 setAvatarDialogOpen(false);
                 setNewAvatar(null);
             } catch (error) {
@@ -147,8 +152,44 @@ const UserProfile = ({
         });
     };
 
+    // Add Avatar Dialog
+    const renderAvatarDialog = () => (
+        <Dialog open={avatarDialogOpen} onClose={() => setAvatarDialogOpen(false)}>
+            <DialogTitle>Update Profile Picture</DialogTitle>
+            <DialogContent>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, p: 2 }}>
+                    <Avatar
+                        src={newAvatar || user?.profile?.avatar?.url}
+                        sx={{ width: 150, height: 150 }}
+                    >
+                        {user?.username ? user.username[0].toUpperCase() : '?'}
+                    </Avatar>
+                    <Button
+                        variant="contained"
+                        component="label"
+                    >
+                        Choose File
+                        <input
+                            type="file"
+                            hidden
+                            accept="image/*"
+                            onChange={handleAvatarChange}
+                        />
+                    </Button>
+                </Box>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setAvatarDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSaveAvatar} variant="contained" disabled={!newAvatar}>
+                    Save
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
+
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {renderAvatarDialog()}
             <Paper
                 elevation={0}
                 sx={{
@@ -437,47 +478,6 @@ const UserProfile = ({
                     </motion.div>
                 )}
             </Box>
-
-            <Dialog
-                open={avatarDialogOpen}
-                onClose={() => setAvatarDialogOpen(false)}
-                maxWidth="xs"
-                fullWidth
-            >
-                <DialogTitle>Update Profile Picture</DialogTitle>
-                <DialogContent>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, pt: 2 }}>
-                        <Avatar
-                            src={newAvatar || user?.profile?.avatar?.url}
-                            sx={{ width: 150, height: 150 }}
-                        >
-                            {user?.username ? user.username[0].toUpperCase() : '?'}
-                        </Avatar>
-                        <Button
-                            variant="outlined"
-                            component="label"
-                        >
-                            Choose File
-                            <input
-                                type="file"
-                                hidden
-                                accept="image/*"
-                                onChange={handleAvatarChange}
-                            />
-                        </Button>
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setAvatarDialogOpen(false)}>Cancel</Button>
-                    <Button
-                        onClick={handleSaveAvatar}
-                        disabled={!newAvatar || !onUpdateAvatar}
-                        variant="contained"
-                    >
-                        Save
-                    </Button>
-                </DialogActions>
-            </Dialog>
         </Box>
     );
 };

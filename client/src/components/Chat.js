@@ -1,350 +1,247 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, Drawer, useMediaQuery, useTheme, IconButton, Divider, List, ListItem, ListItemText, ListItemAvatar, Avatar, Badge, Typography } from '@mui/material';
-import { Menu as MenuIcon, FiberManualRecord as OnlineIcon } from '@mui/icons-material';
-import { useSocket } from '../contexts/SocketContext';
+import React, { useState } from 'react';
+import {
+    Box,
+    Drawer,
+    AppBar,
+    Toolbar,
+    Typography,
+    IconButton,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText,
+    Avatar,
+    Badge,
+    Divider,
+    useTheme,
+    useMediaQuery
+} from '@mui/material';
+import {
+    Menu as MenuIcon,
+    ExitToApp as LogoutIcon,
+    Settings as SettingsIcon,
+    Chat as ChatIcon
+} from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import RoomList from './RoomList';
+import { useSocket } from '../contexts/SocketContext';
 import ChatRoom from './ChatRoom';
+import ChatLobby from './ChatLobby';
 import UserProfile from './UserProfile';
 
+const DRAWER_WIDTH = 240;
+
 const Chat = () => {
+    const { user, logout } = useAuth();
     const { socket } = useSocket();
-    const { user, updateUser } = useAuth();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const [activeRoom, setActiveRoom] = useState(null);
+    const [showSettings, setShowSettings] = useState(false);
     const [rooms, setRooms] = useState([]);
-    const [currentRoomId, setCurrentRoomId] = useState(null);
-    const [drawerOpen, setDrawerOpen] = useState(!isMobile);
-    const [error, setError] = useState('');
-    const [onlineUsers, setOnlineUsers] = useState([]);
 
-    const handleUpdateProfile = async (profile) => {
-        try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/me`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ profile })
-            });
-            const data = await response.json();
-            if (data.user) {
-                updateUser(data.user);
-            }
-        } catch (error) {
-            console.error('Error updating profile:', error);
-        }
+    const handleDrawerToggle = () => {
+        setMobileOpen(!mobileOpen);
     };
 
-    const handleUpdatePreferences = async (preferences) => {
-        try {
-            // Create a clean preferences object without any circular references
-            const cleanPreferences = {
-                theme: preferences.theme,
-                language: preferences.language,
-                notifications: preferences.notifications,
-                messageColor: preferences.messageColor,
-                bubbleStyle: preferences.bubbleStyle
-            };
-
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/me`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ preferences: cleanPreferences })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (data.user) {
-                updateUser(data.user);
-            }
-        } catch (error) {
-            console.error('Error updating preferences:', error);
-        }
+    const handleCreateRoom = () => {
+        // Implement room creation logic
     };
 
-    const handleUpdateAvatar = async (avatarData) => {
-        try {
-            // Create a new FormData object
-            const formData = new FormData();
-
-            // Convert base64 to blob
-            const base64Response = await fetch(avatarData);
-            const blob = await base64Response.blob();
-
-            // Append the blob to FormData
-            formData.append('avatar', blob, 'avatar.jpg');
-
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/avatar`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: formData
-            });
-
-            const data = await response.json();
-            if (data.user) {
-                updateUser(data.user);
-            }
-        } catch (error) {
-            console.error('Error updating avatar:', error);
-        }
-    };
-
-    useEffect(() => {
-        if (socket) {
-            loadRooms();
-            loadOnlineUsers();
-
-            socket.on('roomListUpdate', loadRooms);
-            socket.on('roomDeleted', handleRoomDeleted);
-            socket.on('userConnected', handleUserConnection);
-            socket.on('userDisconnected', handleUserDisconnection);
-            socket.on('onlineUsers', setOnlineUsers);
-
-            return () => {
-                socket.off('roomListUpdate');
-                socket.off('roomDeleted');
-                socket.off('userConnected');
-                socket.off('userDisconnected');
-                socket.off('onlineUsers');
-            };
-        }
-    }, [socket]);
-
-    const loadRooms = async () => {
-        socket.emit('getRooms', (response) => {
-            if (response.success) {
-                setRooms(response.rooms);
-                // If no room is selected and rooms exist, select the first one
-                if (!currentRoomId && response.rooms.length > 0) {
-                    setCurrentRoomId(response.rooms[0]._id);
-                }
-            } else {
-                setError('Failed to load rooms');
-            }
-        });
-    };
-
-    const handleRoomSelect = (roomId) => {
-        setCurrentRoomId(roomId);
+    const handleJoinRoom = (roomId) => {
+        setActiveRoom(roomId);
         if (isMobile) {
-            setDrawerOpen(false);
+            setMobileOpen(false);
         }
     };
 
-    const handleRoomDeleted = ({ roomId }) => {
-        if (currentRoomId === roomId) {
-            setCurrentRoomId(null);
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } catch (error) {
+            console.error('Error logging out:', error);
         }
     };
 
-    const handleLeaveRoom = () => {
-        setCurrentRoomId(null);
-        if (isMobile) {
-            setDrawerOpen(true);
-        }
-    };
+    const drawer = (
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* User Profile Section */}
+            <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Badge
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    variant="dot"
+                    color="success"
+                >
+                    <Avatar src={user?.profile?.avatar?.url}>
+                        {user?.username ? user.username[0].toUpperCase() : '?'}
+                    </Avatar>
+                </Badge>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle1" noWrap>
+                        {user?.username}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                        Online
+                    </Typography>
+                </Box>
+            </Box>
 
-    const loadOnlineUsers = () => {
-        if (socket) {
-            socket.emit('getOnlineUsers');
-        }
-    };
+            <Divider />
 
-    const handleUserConnection = (userData) => {
-        setOnlineUsers(prev => [...prev, userData]);
-    };
+            {/* Navigation List */}
+            <List sx={{ flex: 1, overflow: 'auto' }}>
+                <ListItem button onClick={() => setActiveRoom(null)}>
+                    <ListItemIcon>
+                        <ChatIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="General Lobby" />
+                </ListItem>
+                {rooms.map((room) => (
+                    <ListItem
+                        key={room.id}
+                        button
+                        selected={activeRoom === room.id}
+                        onClick={() => handleJoinRoom(room.id)}
+                    >
+                        <ListItemIcon>
+                            <Avatar sx={{ width: 32, height: 32 }}>
+                                {room.name[0].toUpperCase()}
+                            </Avatar>
+                        </ListItemIcon>
+                        <ListItemText
+                            primary={room.name}
+                            secondary={`${room.members.length} members`}
+                            primaryTypographyProps={{ noWrap: true }}
+                            secondaryTypographyProps={{ noWrap: true }}
+                        />
+                    </ListItem>
+                ))}
+            </List>
 
-    const handleUserDisconnection = (userId) => {
-        setOnlineUsers(prev => prev.filter(u => u._id !== userId));
-    };
+            <Divider />
 
-    const handleDirectMessage = async (targetUser) => {
-        if (socket) {
-            socket.emit('createDirectRoom', { targetUserId: targetUser._id }, (response) => {
-                if (response.success) {
-                    setCurrentRoomId(response.room._id);
-                    if (isMobile) {
-                        setDrawerOpen(false);
-                    }
-                }
-            });
-        }
-    };
+            {/* Bottom Actions */}
+            <List>
+                <ListItem button onClick={() => setShowSettings(true)}>
+                    <ListItemIcon>
+                        <SettingsIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Settings" />
+                </ListItem>
+                <ListItem button onClick={handleLogout}>
+                    <ListItemIcon>
+                        <LogoutIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Logout" />
+                </ListItem>
+            </List>
+        </Box>
+    );
 
     return (
-        <Box sx={{ height: '100vh', display: 'flex', bgcolor: 'background.default' }}>
-            {/* Menu Button */}
-            <IconButton
+        <Box sx={{ display: 'flex', height: '100vh' }}>
+            <AppBar
+                position="fixed"
                 sx={{
-                    position: 'fixed',
-                    top: 16,
-                    left: drawerOpen ? 336 : 16,
-                    zIndex: theme.zIndex.drawer + 1,
-                    bgcolor: 'background.paper',
-                    boxShadow: 1,
-                    transition: theme.transitions.create(['left'], {
-                        easing: theme.transitions.easing.sharp,
-                        duration: theme.transitions.duration.leavingScreen,
-                    }),
-                    '&:hover': { bgcolor: 'background.paper' }
-                }}
-                onClick={() => setDrawerOpen(!drawerOpen)}
-            >
-                <MenuIcon />
-            </IconButton>
-
-            {/* Left Panel */}
-            <Drawer
-                variant={isMobile ? 'temporary' : 'persistent'}
-                open={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                sx={{
-                    width: 320,
-                    flexShrink: 0,
-                    '& .MuiDrawer-paper': {
-                        width: 320,
-                        boxSizing: 'border-box',
-                        border: 'none',
-                        bgcolor: 'background.paper',
-                        backgroundImage: 'none',
-                    }
+                    width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
+                    ml: { sm: `${DRAWER_WIDTH}px` }
                 }}
             >
-                <Box sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    bgcolor: 'background.paper',
-                }}>
-                    {/* User Profile Section */}
-                    <UserProfile
-                        user={user}
-                        onUpdateProfile={handleUpdateProfile}
-                        onUpdatePreferences={handleUpdatePreferences}
-                        onUpdateAvatar={handleUpdateAvatar}
-                    />
-                    <Divider />
+                <Toolbar>
+                    <IconButton
+                        color="inherit"
+                        edge="start"
+                        onClick={handleDrawerToggle}
+                        sx={{ mr: 2, display: { sm: 'none' } }}
+                    >
+                        <MenuIcon />
+                    </IconButton>
+                    <Typography variant="h6" noWrap component="div">
+                        {activeRoom ? 'Chat Room' : 'General Lobby'}
+                    </Typography>
+                </Toolbar>
+            </AppBar>
 
-                    {/* Online Users Section */}
-                    <Box sx={{ p: 2, flex: 1, overflowY: 'auto' }}>
-                        <Typography variant="h6" gutterBottom sx={{ pl: 1 }}>
-                            Online Users
-                        </Typography>
-                        <List>
-                            {onlineUsers.map((onlineUser) => (
-                                onlineUser._id !== user?._id && (
-                                    <ListItem
-                                        key={onlineUser._id}
-                                        button
-                                        onClick={() => handleDirectMessage(onlineUser)}
-                                        sx={{
-                                            borderRadius: 1,
-                                            mb: 0.5,
-                                            '&:hover': {
-                                                bgcolor: 'action.hover'
-                                            }
-                                        }}
-                                    >
-                                        <ListItemAvatar>
-                                            <Badge
-                                                overlap="circular"
-                                                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                                                badgeContent={
-                                                    <Box
-                                                        sx={{
-                                                            width: 10,
-                                                            height: 10,
-                                                            borderRadius: '50%',
-                                                            bgcolor: 'success.main',
-                                                            border: '2px solid',
-                                                            borderColor: 'background.paper'
-                                                        }}
-                                                    />
-                                                }
-                                            >
-                                                <Avatar src={onlineUser.profile?.avatar?.url}>
-                                                    {onlineUser.username?.[0].toUpperCase()}
-                                                </Avatar>
-                                            </Badge>
-                                        </ListItemAvatar>
-                                        <ListItemText
-                                            primary={onlineUser.username}
-                                            secondary="Online"
-                                            primaryTypographyProps={{
-                                                variant: 'subtitle2'
-                                            }}
-                                            secondaryTypographyProps={{
-                                                variant: 'caption',
-                                                sx: { color: 'success.main' }
-                                            }}
-                                        />
-                                    </ListItem>
-                                )
-                            ))}
-                        </List>
-                    </Box>
-                    <Divider />
+            <Box
+                component="nav"
+                sx={{ width: { sm: DRAWER_WIDTH }, flexShrink: { sm: 0 } }}
+            >
+                <Drawer
+                    variant="temporary"
+                    open={mobileOpen}
+                    onClose={handleDrawerToggle}
+                    ModalProps={{ keepMounted: true }}
+                    sx={{
+                        display: { xs: 'block', sm: 'none' },
+                        '& .MuiDrawer-paper': {
+                            boxSizing: 'border-box',
+                            width: DRAWER_WIDTH
+                        }
+                    }}
+                >
+                    {drawer}
+                </Drawer>
+                <Drawer
+                    variant="permanent"
+                    sx={{
+                        display: { xs: 'none', sm: 'block' },
+                        '& .MuiDrawer-paper': {
+                            boxSizing: 'border-box',
+                            width: DRAWER_WIDTH
+                        }
+                    }}
+                    open
+                >
+                    {drawer}
+                </Drawer>
+            </Box>
 
-                    {/* Rooms Section */}
-                    <Box sx={{ flex: 1, overflowY: 'auto' }}>
-                        <RoomList
-                            rooms={rooms}
-                            onRoomSelect={handleRoomSelect}
-                            socket={socket}
-                        />
-                    </Box>
-                </Box>
-            </Drawer>
-
-            {/* Main Chat Area */}
             <Box
                 component="main"
                 sx={{
                     flexGrow: 1,
+                    p: 0,
+                    width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
                     height: '100vh',
                     display: 'flex',
                     flexDirection: 'column',
-                    position: 'relative',
-                    ml: !isMobile && drawerOpen ? '320px' : 0,
-                    transition: theme.transitions.create(['margin'], {
-                        easing: theme.transitions.easing.sharp,
-                        duration: theme.transitions.duration.leavingScreen,
-                    })
+                    pt: { xs: 7, sm: 8 }
                 }}
             >
-                {currentRoomId ? (
+                {activeRoom ? (
                     <ChatRoom
-                        roomId={currentRoomId}
-                        onLeaveRoom={handleLeaveRoom}
+                        roomId={activeRoom}
                         socket={socket}
+                        onClose={() => setActiveRoom(null)}
                     />
                 ) : (
-                    <Box
-                        sx={{
-                            flex: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            bgcolor: 'background.default'
-                        }}
-                    >
-                        <Typography variant="h6" color="text.secondary">
-                            Select a user or room to start chatting
-                        </Typography>
-                    </Box>
+                    <ChatLobby
+                        socket={socket}
+                        onCreateRoom={handleCreateRoom}
+                        onJoinRoom={handleJoinRoom}
+                        onOpenSettings={() => setShowSettings(true)}
+                    />
                 )}
             </Box>
+
+            {/* Settings Dialog */}
+            {showSettings && (
+                <UserProfile
+                    user={user}
+                    onClose={() => setShowSettings(false)}
+                    onUpdateProfile={(profile) => {
+                        // Implement profile update
+                    }}
+                    onUpdatePreferences={(preferences) => {
+                        // Implement preferences update
+                    }}
+                    onUpdateAvatar={(avatar) => {
+                        // Implement avatar update
+                    }}
+                />
+            )}
         </Box>
     );
 };

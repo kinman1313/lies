@@ -1,93 +1,32 @@
-const {
-    handleCreateRoom,
-    handleJoinRoom,
-    handleLeaveRoom,
-    handleDeleteRoom,
-    handleInviteMember,
-    handleAcceptInvite,
-    handleGetRooms
-} = require('./roomHandlers');
+const { handleMessage, handleTyping, handleReaction } = require('./messageHandlers');
+const { handleJoinRoom, handleLeaveRoom, handleGetRoomData } = require('./roomHandlers');
+const { handleJoinLobby, handleLeaveLobby, handleCreatePrivateRoom } = require('./lobbyHandlers');
 
-const {
-    handleSendMessage,
-    handleTyping,
-    handleReadMessage
-} = require('./messageHandlers');
-
-const { verifyToken } = require('../utils/auth');
-
-module.exports = (io) => {
-    io.use(async (socket, next) => {
-        try {
-            const token = socket.handshake.auth.token;
-            if (!token) {
-                return next(new Error('Authentication error'));
-            }
-
-            const user = await verifyToken(token);
-            socket.user = user;
-            next();
-        } catch (error) {
-            next(new Error('Authentication error'));
-        }
-    });
-
+const initializeSocket = (io) => {
     io.on('connection', (socket) => {
-        console.log('User connected:', socket.user.name);
+        console.log('User connected:', socket.userId);
 
-        // Room events
-        socket.on('createRoom', async (data, callback) => {
-            const result = await handleCreateRoom(io, socket, data);
-            callback(result);
-        });
+        // Lobby handlers
+        socket.on('joinLobby', () => handleJoinLobby(io, socket));
+        socket.on('leaveLobby', () => handleLeaveLobby(socket));
+        socket.on('createPrivateRoom', (data) => handleCreatePrivateRoom(io, socket, data));
 
-        socket.on('joinRoom', async (data, callback) => {
-            const result = await handleJoinRoom(io, socket, data);
-            callback(result);
-        });
+        // Room handlers
+        socket.on('joinRoom', (data) => handleJoinRoom(io, socket, data));
+        socket.on('leaveRoom', (data) => handleLeaveRoom(io, socket, data));
+        socket.on('getRoomData', (data, callback) => handleGetRoomData(socket, data, callback));
 
-        socket.on('leaveRoom', async (data, callback) => {
-            const result = await handleLeaveRoom(io, socket, data);
-            callback(result);
-        });
-
-        socket.on('deleteRoom', async (data, callback) => {
-            const result = await handleDeleteRoom(io, socket, data);
-            callback(result);
-        });
-
-        socket.on('inviteMember', async (data, callback) => {
-            const result = await handleInviteMember(io, socket, data);
-            callback(result);
-        });
-
-        socket.on('acceptInvite', async (data, callback) => {
-            const result = await handleAcceptInvite(io, socket, data);
-            callback(result);
-        });
-
-        socket.on('getRooms', async (callback) => {
-            const result = await handleGetRooms(socket);
-            callback(result);
-        });
-
-        // Message events
-        socket.on('sendMessage', async (data, callback) => {
-            const result = await handleSendMessage(io, socket, data);
-            callback(result);
-        });
-
-        socket.on('typing', async (data) => {
-            await handleTyping(io, socket, data);
-        });
-
-        socket.on('readMessage', async (data, callback) => {
-            const result = await handleReadMessage(io, socket, data);
-            callback(result);
-        });
+        // Message handlers
+        socket.on('sendMessage', (data) => handleMessage(io, socket, data));
+        socket.on('typing', (data) => handleTyping(io, socket, data));
+        socket.on('messageReaction', (data) => handleReaction(io, socket, data));
 
         socket.on('disconnect', () => {
-            console.log('User disconnected:', socket.user.name);
+            console.log('User disconnected:', socket.userId);
+            // Notify lobby about user disconnection
+            io.to('lobby').emit('userDisconnected', socket.userId);
         });
     });
-}; 
+};
+
+module.exports = initializeSocket; 
