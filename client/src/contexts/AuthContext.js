@@ -57,18 +57,23 @@ export const AuthProvider = ({ children }) => {
         return user;
     };
 
-    const logout = () => {
+    const logout = async () => {
         localStorage.removeItem('token');
         delete axios.defaults.headers.common['Authorization'];
         setUser(null);
     };
 
+    const updateUser = (updatedUser) => {
+        setUser(updatedUser);
+    };
+
     const value = {
         user,
+        loading,
         login,
         register,
         logout,
-        loading
+        updateUser
     };
 
     return (

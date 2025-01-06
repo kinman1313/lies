@@ -3,6 +3,7 @@ const http = require('http');
 const socketIO = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const { handleUpdateAvatar } = require('./socket/userHandlers');
 require('dotenv').config();
 
 // Connect to MongoDB
@@ -69,6 +70,7 @@ io.on('connection', (socket) => {
     console.log('New client connected');
 
     socket.on('join', (username) => {
+        socket.username = username; // Store username in socket for later use
         users.set(socket.id, username);
         io.emit('userJoined', { username, users: Array.from(users.values()) });
     });
@@ -99,6 +101,8 @@ io.on('connection', (socket) => {
     socket.on('removeReaction', ({ messageId, emoji, username }) => {
         io.emit('removeReaction', { messageId, emoji, username });
     });
+
+    socket.on('updateAvatar', (data) => handleUpdateAvatar(io, socket, data));
 
     socket.on('disconnect', () => {
         const username = users.get(socket.id);
