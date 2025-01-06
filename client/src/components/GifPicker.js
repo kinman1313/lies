@@ -2,19 +2,17 @@ import React, { useState, useEffect } from 'react';
 import {
     Box,
     TextField,
-    IconButton,
     ImageList,
     ImageListItem,
-    Paper,
     Typography,
-    CircularProgress
+    CircularProgress,
+    InputAdornment
 } from '@mui/material';
 import {
-    Search as SearchIcon,
-    Close as CloseIcon
+    Search as SearchIcon
 } from '@mui/icons-material';
 
-const GIPHY_API_KEY = 'DO7ARGJtRRks2yxeAvolAIBFJqM74EPV';
+const GIPHY_API_KEY = process.env.REACT_APP_GIPHY_API_KEY;
 const GIPHY_API_URL = 'https://api.giphy.com/v1/gifs';
 
 const GifPicker = ({ onSelect, onClose }) => {
@@ -30,9 +28,13 @@ const GifPicker = ({ onSelect, onClose }) => {
             const queryParams = new URLSearchParams({
                 api_key: GIPHY_API_KEY,
                 limit: 20,
+                rating: 'g',
                 ...params
             });
             const response = await fetch(`${GIPHY_API_URL}/${endpoint}?${queryParams}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch GIFs');
+            }
             const data = await response.json();
             setGifs(data.data);
         } catch (err) {
@@ -54,12 +56,6 @@ const GifPicker = ({ onSelect, onClose }) => {
         }
     };
 
-    const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
-            handleSearch(e);
-        }
-    };
-
     const handleGifSelect = (gif) => {
         onSelect({
             url: gif.images.fixed_height.url,
@@ -67,96 +63,103 @@ const GifPicker = ({ onSelect, onClose }) => {
             height: gif.images.fixed_height.height,
             title: gif.title
         });
-        onClose();
     };
 
     return (
-        <Box sx={{ width: '100%', maxWidth: 600, margin: '0 auto' }}>
-            <Paper
-                elevation={3}
-                sx={{
-                    p: 2,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2,
-                    maxHeight: '70vh',
-                    overflow: 'hidden'
-                }}
-            >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Typography variant="h6">
-                        Select a GIF
-                    </Typography>
-                    <IconButton onClick={onClose} size="small">
-                        <CloseIcon />
-                    </IconButton>
-                </Box>
-
-                <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            maxHeight: '60vh',
+            overflow: 'hidden'
+        }}>
+            <Box sx={{
+                p: 2,
+                borderBottom: 1,
+                borderColor: 'divider'
+            }}>
+                <form onSubmit={handleSearch} style={{ width: '100%' }}>
                     <TextField
                         fullWidth
-                        size="small"
-                        placeholder="Search GIFs..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyPress={handleKeyPress}
+                        placeholder="Search GIFs..."
+                        variant="outlined"
+                        size="small"
                         InputProps={{
-                            endAdornment: (
-                                <IconButton
-                                    size="small"
-                                    onClick={handleSearch}
-                                    disabled={loading}
-                                >
+                            startAdornment: (
+                                <InputAdornment position="start">
                                     <SearchIcon />
-                                </IconButton>
+                                </InputAdornment>
                             )
                         }}
                     />
-                </Box>
+                </form>
+            </Box>
 
-                {error && (
-                    <Typography color="error" variant="body2" align="center">
-                        {error}
-                    </Typography>
-                )}
-
-                <Box sx={{ overflow: 'auto', flexGrow: 1 }}>
-                    {loading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                            <CircularProgress />
-                        </Box>
-                    ) : (
-                        <ImageList cols={3} gap={8} sx={{ m: 0 }}>
-                            {gifs.map((gif) => (
-                                <ImageListItem
-                                    key={gif.id}
-                                    sx={{
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                            opacity: 0.8,
-                                            transform: 'scale(1.02)',
-                                            transition: 'all 0.2s ease-in-out'
-                                        }
+            <Box sx={{
+                flex: 1,
+                overflow: 'auto',
+                p: 2
+            }}>
+                {error ? (
+                    <Box sx={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        height: '100%'
+                    }}>
+                        <Typography color="error">{error}</Typography>
+                    </Box>
+                ) : loading ? (
+                    <Box sx={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        height: '100%'
+                    }}>
+                        <CircularProgress />
+                    </Box>
+                ) : (
+                    <ImageList
+                        cols={2}
+                        gap={8}
+                        sx={{
+                            m: 0,
+                            width: '100%',
+                            height: '100%'
+                        }}
+                    >
+                        {gifs.map((gif) => (
+                            <ImageListItem
+                                key={gif.id}
+                                onClick={() => handleGifSelect(gif)}
+                                sx={{
+                                    cursor: 'pointer',
+                                    overflow: 'hidden',
+                                    borderRadius: 1,
+                                    '&:hover': {
+                                        opacity: 0.8,
+                                        transform: 'scale(0.98)',
+                                        transition: 'all 0.2s ease-in-out'
+                                    }
+                                }}
+                            >
+                                <img
+                                    src={gif.images.fixed_height.url}
+                                    alt={gif.title}
+                                    loading="lazy"
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover'
                                     }}
-                                    onClick={() => handleGifSelect(gif)}
-                                >
-                                    <img
-                                        src={gif.images.fixed_height.url}
-                                        alt={gif.title}
-                                        loading="lazy"
-                                        style={{
-                                            width: '100%',
-                                            height: '100%',
-                                            objectFit: 'cover',
-                                            borderRadius: '4px'
-                                        }}
-                                    />
-                                </ImageListItem>
-                            ))}
-                        </ImageList>
-                    )}
-                </Box>
-            </Paper>
+                                />
+                            </ImageListItem>
+                        ))}
+                    </ImageList>
+                )}
+            </Box>
         </Box>
     );
 };

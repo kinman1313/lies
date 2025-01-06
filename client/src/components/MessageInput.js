@@ -21,6 +21,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import GifPicker from './GifPicker';
 
 const MessageInput = ({ onSendMessage, onTyping }) => {
     const { user } = useAuth();
@@ -103,6 +104,19 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
         }
     };
 
+    const handleGifSelect = (gif) => {
+        onSendMessage({
+            type: 'gif',
+            content: gif.url,
+            metadata: {
+                width: gif.width,
+                height: gif.height,
+                title: gif.title
+            }
+        });
+        setGifDialogOpen(false);
+    };
+
     const handleStartRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -175,20 +189,25 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
 
     return (
         <Box sx={{
-            p: 2,
+            position: 'sticky',
+            bottom: 0,
+            left: 0,
+            right: 0,
             backgroundColor: 'background.paper',
             borderTop: 1,
-            borderColor: 'divider'
+            borderColor: 'divider',
+            zIndex: 1000
         }}>
             {selectedFile && (
                 <Box sx={{
-                    mb: 1,
                     p: 1,
                     backgroundColor: 'action.hover',
                     borderRadius: 1,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    mx: 2,
+                    mt: 1
                 }}>
                     <Typography variant="body2" noWrap>
                         {selectedFile.name}
@@ -199,7 +218,13 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
                 </Box>
             )}
 
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+            <Box sx={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: 1,
+                p: 2,
+                pt: selectedFile ? 1 : 2
+            }}>
                 <TextField
                     fullWidth
                     multiline
@@ -214,7 +239,16 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
                             <Typography variant="caption" color="primary" sx={{ mr: 1 }}>
                                 {formatRecordingTime(recordingTime)}
                             </Typography>
-                        )
+                        ),
+                        sx: {
+                            alignItems: 'center',
+                            p: 1
+                        }
+                    }}
+                    sx={{
+                        '& .MuiOutlinedInput-root': {
+                            borderRadius: 2
+                        }
                     }}
                 />
 
@@ -237,6 +271,7 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
                                     <IconButton
                                         onClick={() => fileInputRef.current.click()}
                                         disabled={isUploading}
+                                        size="medium"
                                     >
                                         <AttachFileIcon />
                                     </IconButton>
@@ -252,6 +287,7 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
                                     <IconButton
                                         onClick={() => setGifDialogOpen(true)}
                                         disabled={isUploading}
+                                        size="medium"
                                     >
                                         <GifIcon />
                                     </IconButton>
@@ -270,42 +306,47 @@ const MessageInput = ({ onSendMessage, onTyping }) => {
                                 onClick={isRecording ? handleStopRecording : handleStartRecording}
                                 color={isRecording ? 'error' : 'default'}
                                 disabled={isUploading}
+                                size="medium"
                             >
                                 {isRecording ? <StopIcon /> : <MicIcon />}
                             </IconButton>
                         </Tooltip>
                     </motion.div>
 
-                    {(message.trim() || selectedFile) && (
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            exit={{ scale: 0 }}
-                        >
-                            <Tooltip title="Send Message">
-                                <IconButton
-                                    onClick={handleSendMessage}
-                                    color="primary"
-                                    disabled={isUploading}
-                                >
-                                    {isUploading ? <CircularProgress size={24} /> : <SendIcon />}
-                                </IconButton>
-                            </Tooltip>
-                        </motion.div>
-                    )}
+                    <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        exit={{ scale: 0 }}
+                    >
+                        <Tooltip title="Send Message">
+                            <IconButton
+                                onClick={handleSendMessage}
+                                color="primary"
+                                disabled={isUploading || (!message.trim() && !selectedFile)}
+                                size="medium"
+                            >
+                                {isUploading ? <CircularProgress size={24} /> : <SendIcon />}
+                            </IconButton>
+                        </Tooltip>
+                    </motion.div>
                 </AnimatePresence>
             </Box>
 
-            {/* GIF Dialog */}
             <Dialog
                 open={gifDialogOpen}
                 onClose={() => setGifDialogOpen(false)}
                 maxWidth="md"
                 fullWidth
+                PaperProps={{
+                    sx: {
+                        height: '80vh',
+                        maxHeight: '600px'
+                    }
+                }}
             >
                 <DialogTitle>Select a GIF</DialogTitle>
-                <DialogContent>
-                    {/* Add your GIF picker component here */}
+                <DialogContent dividers>
+                    <GifPicker onSelect={handleGifSelect} onClose={() => setGifDialogOpen(false)} />
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setGifDialogOpen(false)}>Cancel</Button>
