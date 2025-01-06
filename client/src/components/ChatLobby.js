@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
+import MessageInput from './MessageInput';
 
 const ChatLobby = ({
     onCreateRoom,
@@ -41,6 +42,7 @@ const ChatLobby = ({
     const [onlineUsers, setOnlineUsers] = useState([]);
     const [menuAnchorEl, setMenuAnchorEl] = useState(null);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [messages, setMessages] = useState([]);
 
     useEffect(() => {
         if (socket) {
@@ -52,15 +54,26 @@ const ChatLobby = ({
                 setOnlineUsers(users.filter(u => u.id !== user.id));
             });
 
+            // Listen for lobby messages
+            socket.on('lobbyMessage', (message) => {
+                setMessages(prev => [...prev, message]);
+            });
+
             return () => {
                 socket.off('onlineUsers');
+                socket.off('lobbyMessage');
                 socket.emit('leaveLobby');
             };
         }
     }, [socket, user.id]);
 
-    const handleCreateRoom = () => {
-        onCreateRoom && onCreateRoom();
+    const handleSendMessage = (messageData) => {
+        if (socket) {
+            socket.emit('sendLobbyMessage', {
+                ...messageData,
+                roomType: 'lobby'
+            });
+        }
     };
 
     const handleUserClick = (clickedUser) => {
@@ -91,56 +104,97 @@ const ChatLobby = ({
                 </Typography>
             </Paper>
 
-            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                <List>
-                    {onlineUsers.map((onlineUser) => (
-                        <motion.div
-                            key={onlineUser.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.2 }}
-                        >
-                            <ListItem
-                                button
-                                onClick={() => handleUserClick(onlineUser)}
-                                sx={{
-                                    borderRadius: 1,
-                                    mb: 1,
-                                    '&:hover': {
-                                        backgroundColor: 'action.hover'
-                                    }
-                                }}
+            <Box sx={{ flex: 1, overflow: 'auto', p: 2, display: 'flex' }}>
+                {/* Online Users List */}
+                <Box sx={{ width: 300, borderRight: 1, borderColor: 'divider', pr: 2 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                        Online Users
+                    </Typography>
+                    <List>
+                        {onlineUsers.map((onlineUser) => (
+                            <motion.div
+                                key={onlineUser.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.2 }}
                             >
-                                <ListItemAvatar>
-                                    <Badge
-                                        overlap="circular"
-                                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                                        variant="dot"
-                                        color="success"
-                                    >
-                                        <Avatar src={onlineUser.profile?.avatar?.url}>
-                                            {onlineUser.username[0].toUpperCase()}
-                                        </Avatar>
-                                    </Badge>
-                                </ListItemAvatar>
-                                <ListItemText
-                                    primary={onlineUser.username}
-                                    secondary={onlineUser.status || 'Online'}
-                                />
-                                <IconButton
-                                    edge="end"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMenuAnchorEl(e.currentTarget);
-                                        setSelectedUser(onlineUser);
+                                <ListItem
+                                    button
+                                    onClick={() => handleUserClick(onlineUser)}
+                                    sx={{
+                                        borderRadius: 1,
+                                        mb: 1,
+                                        '&:hover': {
+                                            backgroundColor: 'action.hover'
+                                        }
                                     }}
                                 >
-                                    <MoreIcon />
-                                </IconButton>
-                            </ListItem>
-                        </motion.div>
-                    ))}
-                </List>
+                                    <ListItemAvatar>
+                                        <Badge
+                                            overlap="circular"
+                                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                            variant="dot"
+                                            color="success"
+                                        >
+                                            <Avatar src={onlineUser.profile?.avatar?.url}>
+                                                {onlineUser.username[0].toUpperCase()}
+                                            </Avatar>
+                                        </Badge>
+                                    </ListItemAvatar>
+                                    <ListItemText
+                                        primary={onlineUser.username}
+                                        secondary={onlineUser.status || 'Online'}
+                                    />
+                                    <IconButton
+                                        edge="end"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMenuAnchorEl(e.currentTarget);
+                                            setSelectedUser(onlineUser);
+                                        }}
+                                    >
+                                        <MoreIcon />
+                                    </IconButton>
+                                </ListItem>
+                            </motion.div>
+                        ))}
+                    </List>
+                </Box>
+
+                {/* Lobby Chat Area */}
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', pl: 2 }}>
+                    <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
+                        {messages.map((message, index) => (
+                            <Box
+                                key={index}
+                                sx={{
+                                    mb: 1,
+                                    display: 'flex',
+                                    flexDirection: message.userId === user.id ? 'row-reverse' : 'row',
+                                    alignItems: 'flex-start'
+                                }}
+                            >
+                                <Avatar
+                                    src={message.avatar}
+                                    sx={{ width: 32, height: 32, mr: 1, ml: 1 }}
+                                >
+                                    {message.username[0].toUpperCase()}
+                                </Avatar>
+                                <Paper
+                                    sx={{
+                                        p: 1,
+                                        maxWidth: '70%',
+                                        bgcolor: message.userId === user.id ? 'primary.main' : 'background.paper',
+                                        color: message.userId === user.id ? 'primary.contrastText' : 'text.primary'
+                                    }}
+                                >
+                                    <Typography variant="body2">{message.content}</Typography>
+                                </Paper>
+                            </Box>
+                        ))}
+                    </Box>
+                    <MessageInput onSendMessage={handleSendMessage} />
+                </Box>
             </Box>
 
             <SpeedDial

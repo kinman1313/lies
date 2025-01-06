@@ -1,6 +1,6 @@
 const { handleMessage, handleTyping, handleReaction } = require('./messageHandlers');
 const { handleJoinRoom, handleLeaveRoom, handleGetRoomData } = require('./roomHandlers');
-const { handleJoinLobby, handleLeaveLobby, handleCreatePrivateRoom } = require('./lobbyHandlers');
+const { handleJoinLobby, handleLeaveLobby, handleCreatePrivateRoom, handleLobbyMessage } = require('./lobbyHandlers');
 
 const initializeSocket = (io) => {
     io.on('connection', (socket) => {
@@ -9,6 +9,7 @@ const initializeSocket = (io) => {
         // Lobby handlers
         socket.on('joinLobby', () => handleJoinLobby(io, socket));
         socket.on('leaveLobby', () => handleLeaveLobby(socket));
+        socket.on('sendLobbyMessage', (data) => handleLobbyMessage(io, socket, data));
         socket.on('createPrivateRoom', (data) => handleCreatePrivateRoom(io, socket, data));
 
         // Room handlers
