@@ -1,52 +1,31 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { SocketProvider } from './contexts/SocketContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import Chat from './components/Chat';
-import ResetPassword from './components/ResetPassword';
+import PrivateRoute from './components/PrivateRoute';
+import './App.css';
 
-// Protected Route Component
-const PrivateRoute = ({ children }) => {
-    const { user } = useAuth();
-    return user ? children : <Navigate to="/login" />;
-};
-
-// Public Route Component (redirects to chat if already logged in)
-const PublicRoute = ({ children }) => {
-    const { user } = useAuth();
-    return !user ? children : <Navigate to="/chat" />;
-};
-
-// Chat component (moved from previous App.js)
 function App() {
     return (
         <Router>
-            <AuthProvider>
-                <Routes>
-                    <Route path="/login" element={
-                        <PublicRoute>
-                            <Login />
-                        </PublicRoute>
-                    } />
-                    <Route path="/register" element={
-                        <PublicRoute>
-                            <Register />
-                        </PublicRoute>
-                    } />
-                    <Route path="/reset-password" element={
-                        <PublicRoute>
-                            <ResetPassword />
-                        </PublicRoute>
-                    } />
-                    <Route path="/chat" element={
-                        <PrivateRoute>
-                            <Chat />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/" element={<Navigate to="/chat" />} />
-                </Routes>
-            </AuthProvider>
+            <SocketProvider>
+                <div className="app">
+                    <Routes>
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route
+                            path="/"
+                            element={
+                                <PrivateRoute>
+                                    <Chat />
+                                </PrivateRoute>
+                            }
+                        />
+                    </Routes>
+                </div>
+            </SocketProvider>
         </Router>
     );
 }
