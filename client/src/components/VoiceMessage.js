@@ -18,7 +18,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const VoiceMessage = ({ onSend, maxDuration = 300 }) => {
+const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [duration, setDuration] = useState(0);
@@ -116,6 +116,7 @@ const VoiceMessage = ({ onSend, maxDuration = 300 }) => {
             setAudioUrl(null);
             setDuration(0);
             setCurrentTime(0);
+            onClose();
         }
     };
 
