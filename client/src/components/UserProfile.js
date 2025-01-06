@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Paper,
@@ -42,7 +42,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 
 const UserProfile = ({
-    user,
+    user = {},
     onUpdateProfile,
     onUpdatePreferences,
     onUpdateAvatar
@@ -53,20 +53,40 @@ const UserProfile = ({
     const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
     const [newAvatar, setNewAvatar] = useState(null);
     const [preferences, setPreferences] = useState({
-        theme: user.preferences?.theme || 'light',
-        language: user.preferences?.language || 'en',
-        notifications: user.preferences?.notifications || true,
-        messageColor: user.preferences?.messageColor || '#7C4DFF',
-        bubbleStyle: user.preferences?.bubbleStyle || 'modern'
+        theme: user?.preferences?.theme || 'light',
+        language: user?.preferences?.language || 'en',
+        notifications: user?.preferences?.notifications || true,
+        messageColor: user?.preferences?.messageColor || '#7C4DFF',
+        bubbleStyle: user?.preferences?.bubbleStyle || 'modern'
     });
     const [profile, setProfile] = useState({
-        bio: user.profile?.bio || '',
-        location: user.profile?.location || '',
-        github: user.profile?.github || '',
-        twitter: user.profile?.twitter || '',
-        linkedin: user.profile?.linkedin || '',
-        website: user.profile?.website || ''
+        bio: user?.profile?.bio || '',
+        location: user?.profile?.location || '',
+        github: user?.profile?.github || '',
+        twitter: user?.profile?.twitter || '',
+        linkedin: user?.profile?.linkedin || '',
+        website: user?.profile?.website || ''
     });
+
+    useEffect(() => {
+        if (user) {
+            setPreferences({
+                theme: user?.preferences?.theme || 'light',
+                language: user?.preferences?.language || 'en',
+                notifications: user?.preferences?.notifications || true,
+                messageColor: user?.preferences?.messageColor || '#7C4DFF',
+                bubbleStyle: user?.preferences?.bubbleStyle || 'modern'
+            });
+            setProfile({
+                bio: user?.profile?.bio || '',
+                location: user?.profile?.location || '',
+                github: user?.profile?.github || '',
+                twitter: user?.profile?.twitter || '',
+                linkedin: user?.profile?.linkedin || '',
+                website: user?.profile?.website || ''
+            });
+        }
+    }, [user]);
 
     const handleSaveProfile = () => {
         onUpdateProfile(profile);
@@ -126,18 +146,18 @@ const UserProfile = ({
                     }
                 >
                     <Avatar
-                        src={user.profile?.avatar?.url}
+                        src={user?.profile?.avatar?.url}
                         sx={{ width: 100, height: 100, mb: 2 }}
                     >
-                        {user.username ? user.username[0].toUpperCase() : '?'}
+                        {user?.username ? user.username[0].toUpperCase() : '?'}
                     </Avatar>
                 </Badge>
 
                 <Typography variant="h5" gutterBottom>
-                    {user.username}
+                    {user?.username || 'User'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {user.email}
+                    {user?.email || 'No email provided'}
                 </Typography>
 
                 {!editMode && profile.bio && (
@@ -397,10 +417,10 @@ const UserProfile = ({
                 <DialogContent>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, pt: 2 }}>
                         <Avatar
-                            src={newAvatar || user.profile?.avatar?.url}
+                            src={newAvatar || user?.profile?.avatar?.url}
                             sx={{ width: 150, height: 150 }}
                         >
-                            {user.username ? user.username[0].toUpperCase() : '?'}
+                            {user?.username ? user.username[0].toUpperCase() : '?'}
                         </Avatar>
                         <Button
                             variant="outlined"
