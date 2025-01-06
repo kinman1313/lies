@@ -36,6 +36,7 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
+    const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
 
     const handleMessageChange = (e) => {
         setMessage(e.target.value);
@@ -102,47 +103,25 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
         setGifDialogOpen(false);
     };
 
+    const startRecording = () => {
+        // Implementation for starting recording
+    };
+
+    const stopRecording = () => {
+        // Implementation for stopping recording
+    };
+
+    const handleFileSelect = (e) => {
+        // Implementation for handling file selection
+    };
+
+    const handleScheduleMessage = () => {
+        // Implementation for handling schedule message
+    };
+
     return (
-        <Box sx={{
-            position: 'sticky',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: 'background.default',
-            borderTop: 1,
-            borderColor: 'divider',
-            p: 2
-        }}>
-            {/* Typing indicator */}
-            {typingUsers?.length > 0 && (
-                <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ pl: 2, pb: 1, display: 'block' }}
-                >
-                    {`[object Object] and ${typingUsers.length - 1} others are typing...`}
-                </Typography>
-            )}
-
-            {/* Message input area */}
-            <Box sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                backgroundColor: 'background.paper',
-                borderRadius: 2,
-                p: 1
-            }}>
-                {/* GIF button */}
-                <IconButton
-                    onClick={() => setGifDialogOpen(true)}
-                    size="medium"
-                    sx={{ color: 'text.secondary' }}
-                >
-                    <GifIcon />
-                </IconButton>
-
-                {/* Message input */}
+        <Box sx={{ position: 'sticky', bottom: 0, bgcolor: 'background.paper', p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TextField
                     fullWidth
                     multiline
@@ -151,22 +130,60 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
                     onChange={handleMessageChange}
                     onKeyPress={handleKeyPress}
                     placeholder="Type a message..."
-                    variant="standard"
-                    InputProps={{
-                        disableUnderline: true,
+                    sx={{
+                        '& .MuiOutlinedInput-root': {
+                            borderRadius: 3,
+                            backgroundColor: 'action.hover'
+                        }
                     }}
-                    sx={{ mx: 1 }}
                 />
 
-                {/* Send button */}
-                <IconButton
-                    onClick={handleSendMessage}
-                    disabled={!message.trim() && !selectedFile}
-                    color="primary"
-                >
-                    <SendIcon />
-                </IconButton>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Tooltip title="Send GIF">
+                        <IconButton onClick={() => setGifDialogOpen(true)} color="primary">
+                            <GifIcon />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Voice Message">
+                        <IconButton
+                            onClick={isRecording ? stopRecording : startRecording}
+                            color={isRecording ? "error" : "primary"}
+                        >
+                            {isRecording ? <StopIcon /> : <MicIcon />}
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Schedule Message">
+                        <IconButton onClick={() => setScheduleDialogOpen(true)} color="primary">
+                            <AccessTimeIcon />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Attach File">
+                        <IconButton onClick={() => fileInputRef.current?.click()} color="primary">
+                            <AttachFileIcon />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Send">
+                        <IconButton
+                            onClick={handleSendMessage}
+                            color="primary"
+                            disabled={isUploading || (!message.trim() && !selectedFile)}
+                        >
+                            {isUploading ? <CircularProgress size={24} /> : <SendIcon />}
+                        </IconButton>
+                    </Tooltip>
+                </Box>
             </Box>
+
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFileSelect}
+            />
 
             {/* GIF Dialog */}
             <Dialog
@@ -175,11 +192,44 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
                 maxWidth="md"
                 fullWidth
             >
-                <GifPicker
-                    onSelect={handleGifSelect}
-                    onClose={() => setGifDialogOpen(false)}
-                />
+                <DialogTitle>Select a GIF</DialogTitle>
+                <DialogContent>
+                    <GifPicker onSelect={handleGifSelect} />
+                </DialogContent>
             </Dialog>
+
+            {/* Schedule Dialog */}
+            <Dialog
+                open={scheduleDialogOpen}
+                onClose={() => setScheduleDialogOpen(false)}
+            >
+                <DialogTitle>Schedule Message</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        Select when to send this message:
+                    </Typography>
+                    {/* Add date/time picker here */}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setScheduleDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleScheduleMessage} variant="contained">Schedule</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Recording Timer */}
+            <AnimatePresence>
+                {isRecording && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                    >
+                        <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+                            Recording: {recordingTime}s
+                        </Typography>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </Box>
     );
 };
