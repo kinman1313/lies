@@ -113,7 +113,7 @@ const VoiceMessage = ({ onSend, maxDuration = 300, onClose }) => {
 
     const handleSend = () => {
         if (audioUrl) {
-            onSend(audioUrl);
+            onSend(audioUrl, duration);
         }
     };
 

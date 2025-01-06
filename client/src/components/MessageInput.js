@@ -54,12 +54,12 @@ const MessageInput = ({ onSendMessage }) => {
         setGifAnchorEl(null);
     };
 
-    const handleVoiceMessageSend = (audioUrl) => {
+    const handleVoiceMessageSend = (audioUrl, duration) => {
         onSendMessage({
             type: 'voice',
             content: audioUrl,
             metadata: {
-                duration: audioRef?.current?.duration || 0
+                duration: duration || 0
             }
         });
         setShowVoiceMessage(false);
