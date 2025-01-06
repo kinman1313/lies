@@ -1,197 +1,184 @@
 const Room = require('../models/Room');
-const User = require('../models/User');
 const Message = require('../models/Message');
-const { sendEmail } = require('../utils/email');
+const User = require('../models/User');
+const { sendInviteEmail } = require('../services/emailService');
 
-const handleCreateRoom = async (io, socket, data) => {
+const handleJoinRoom = async (io, socket, { roomId }) => {
+    try {
+        const room = await Room.findById(roomId)
+            .populate('members.userId', 'username avatar')
+            .populate({
+                path: 'pinnedMessages',
+                populate: {
+                    path: 'userId',
+                    select: 'username avatar'
+                }
+            });
+
+        if (!room) {
+            socket.emit('error', { message: 'Room not found' });
+            return;
+        }
+
+        const member = room.members.find(m => m.userId._id.equals(socket.user._id));
+        if (!member && room.isPrivate) {
+            socket.emit('error', { message: 'Not authorized to join this room' });
+            return;
+        }
+
+        socket.join(roomId);
+
+        // Send room data
+        socket.emit('roomData', {
+            room,
+            messages: await Message.findByRoom(roomId, 50)
+        });
+
+        // Notify other members
+        socket.to(roomId).emit('userJoinedRoom', {
+            roomId,
+            user: {
+                _id: socket.user._id,
+                username: socket.user.username,
+                avatar: socket.user.avatar
+            }
+        });
+    } catch (error) {
+        console.error('Error joining room:', error);
+        socket.emit('error', { message: 'Failed to join room' });
+    }
+};
+
+const handleCreateRoom = async (io, socket, { name, isPrivate = false, description = '' }) => {
     try {
         const room = new Room({
-            name: data.name,
-            ownerId: data.ownerId,
-            members: [data.ownerId]
+            name,
+            ownerId: socket.user._id,
+            isPrivate,
+            description,
+            members: [{
+                userId: socket.user._id,
+                role: 'owner'
+            }]
         });
 
         await room.save();
 
-        // Notify room creation
-        socket.emit('roomCreated', { success: true, room });
-        io.emit('roomListUpdate');
+        // Join the room
+        socket.join(room._id);
 
-        return { success: true, room };
+        // Notify all connected clients about the new room if it's public
+        if (!isPrivate) {
+            io.emit('roomCreated', { room });
+        }
+
+        socket.emit('roomJoined', { room });
     } catch (error) {
         console.error('Error creating room:', error);
-        return { success: false, error: error.message };
+        socket.emit('error', { message: 'Failed to create room' });
     }
 };
 
-const handleJoinRoom = async (io, socket, data) => {
+const handleInviteToRoom = async (io, socket, { roomId, email, role = 'member' }) => {
     try {
-        const room = await Room.findById(data.roomId);
+        const room = await Room.findById(roomId);
         if (!room) {
-            return { success: false, error: 'Room not found' };
+            socket.emit('error', { message: 'Room not found' });
+            return;
         }
 
-        socket.join(data.roomId);
-
-        // Load room data
-        const members = await User.find({ _id: { $in: room.members } })
-            .select('name avatar');
-
-        const messages = await Message.find({ roomId: data.roomId })
-            .sort({ createdAt: -1 })
-            .limit(50)
-            .populate('sender', 'name avatar');
-
-        return {
-            success: true,
-            room,
-            members,
-            messages: messages.reverse()
-        };
-    } catch (error) {
-        console.error('Error joining room:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-const handleLeaveRoom = async (io, socket, data) => {
-    try {
-        const room = await Room.findById(data.roomId);
-        if (!room) {
-            return { success: false, error: 'Room not found' };
+        const member = room.members.find(m => m.userId.equals(socket.user._id));
+        if (!member || !['owner', 'admin'].includes(member.role)) {
+            socket.emit('error', { message: 'Not authorized to invite users' });
+            return;
         }
 
-        await room.removeMember(socket.user._id);
-        socket.leave(data.roomId);
+        const token = await room.createInvite(email, socket.user._id, role);
 
-        // Notify room members
-        io.to(data.roomId).emit('memberUpdate', {
-            members: await User.find({ _id: { $in: room.members } })
-                .select('name avatar')
+        // Send invite email
+        await sendInviteEmail(email, {
+            inviter: socket.user.username,
+            roomName: room.name,
+            inviteLink: `${process.env.CLIENT_URL}/invite/${token}`
         });
 
-        return { success: true };
-    } catch (error) {
-        console.error('Error leaving room:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-const handleDeleteRoom = async (io, socket, data) => {
-    try {
-        const room = await Room.findById(data.roomId);
-        if (!room) {
-            return { success: false, error: 'Room not found' };
-        }
-
-        if (!room.ownerId.equals(socket.user._id)) {
-            return { success: false, error: 'Not authorized' };
-        }
-
-        // Notify members before deletion
-        io.to(data.roomId).emit('roomDeleted', { roomId: data.roomId });
-
-        // Delete room and its messages
-        await Message.deleteMany({ roomId: data.roomId });
-        await room.delete();
-
-        io.emit('roomListUpdate');
-
-        return { success: true };
-    } catch (error) {
-        console.error('Error deleting room:', error);
-        return { success: false, error: error.message };
-    }
-};
-
-const handleInviteMember = async (io, socket, data) => {
-    try {
-        const room = await Room.findById(data.roomId);
-        if (!room) {
-            return { success: false, error: 'Room not found' };
-        }
-
-        if (!room.settings.allowInvites) {
-            return { success: false, error: 'Invites are disabled for this room' };
-        }
-
-        const inviteToken = await room.createInvite(data.email);
-
-        // Send invitation email
-        const inviteUrl = `${process.env.CLIENT_URL}/invite/${inviteToken}`;
-        await sendEmail({
-            to: data.email,
-            subject: `You've been invited to join ${room.name}`,
-            html: `
-                <h2>Chat Room Invitation</h2>
-                <p>You've been invited to join the chat room "${room.name}".</p>
-                <p>Click the link below to join:</p>
-                <a href="${inviteUrl}">${inviteUrl}</a>
-                <p>This invitation will expire in 7 days.</p>
-            `
-        });
-
-        return { success: true };
+        socket.emit('inviteSent', { email });
     } catch (error) {
         console.error('Error sending invite:', error);
-        return { success: false, error: error.message };
+        socket.emit('error', { message: 'Failed to send invite' });
     }
 };
 
-const handleAcceptInvite = async (io, socket, data) => {
+const handlePinMessage = async (io, socket, { roomId, messageId }) => {
     try {
-        const room = await Room.findOne({ 'invites.token': data.token });
+        const room = await Room.findById(roomId);
         if (!room) {
-            return { success: false, error: 'Invalid invite' };
+            socket.emit('error', { message: 'Room not found' });
+            return;
         }
 
-        const isValid = await room.validateInvite(data.token);
-        if (!isValid) {
-            return { success: false, error: 'Invite has expired' };
+        const member = room.members.find(m => m.userId.equals(socket.user._id));
+        if (!member || !['owner', 'admin'].includes(member.role)) {
+            socket.emit('error', { message: 'Not authorized to pin messages' });
+            return;
         }
 
-        await room.addMember(socket.user._id);
-        await room.removeInvite(data.token);
+        const message = await Message.findById(messageId);
+        if (!message) {
+            socket.emit('error', { message: 'Message not found' });
+            return;
+        }
 
-        // Notify room members
-        io.to(room._id.toString()).emit('memberUpdate', {
-            members: await User.find({ _id: { $in: room.members } })
-                .select('name avatar')
+        await message.pin(socket.user._id);
+        await room.pinMessage(messageId);
+
+        io.to(roomId).emit('messagePinned', {
+            messageId,
+            pinnedBy: {
+                _id: socket.user._id,
+                username: socket.user.username
+            }
         });
-
-        return { success: true, room };
     } catch (error) {
-        console.error('Error accepting invite:', error);
-        return { success: false, error: error.message };
+        console.error('Error pinning message:', error);
+        socket.emit('error', { message: 'Failed to pin message' });
     }
 };
 
-const handleGetRooms = async (socket) => {
+const handleUnpinMessage = async (io, socket, { roomId, messageId }) => {
     try {
-        const rooms = await Room.findByMember(socket.user._id)
-            .select('name members lastActivity')
-            .lean();
+        const room = await Room.findById(roomId);
+        if (!room) {
+            socket.emit('error', { message: 'Room not found' });
+            return;
+        }
 
-        // Add member count to each room
-        const roomsWithCounts = rooms.map(room => ({
-            ...room,
-            memberCount: room.members.length,
-            unreadCount: 0 // TODO: Implement unread count
-        }));
+        const member = room.members.find(m => m.userId.equals(socket.user._id));
+        if (!member || !['owner', 'admin'].includes(member.role)) {
+            socket.emit('error', { message: 'Not authorized to unpin messages' });
+            return;
+        }
 
-        return { success: true, rooms: roomsWithCounts };
+        const message = await Message.findById(messageId);
+        if (!message) {
+            socket.emit('error', { message: 'Message not found' });
+            return;
+        }
+
+        await message.unpin();
+        await room.unpinMessage(messageId);
+
+        io.to(roomId).emit('messageUnpinned', { messageId });
     } catch (error) {
-        console.error('Error getting rooms:', error);
-        return { success: false, error: error.message };
+        console.error('Error unpinning message:', error);
+        socket.emit('error', { message: 'Failed to unpin message' });
     }
 };
 
 module.exports = {
-    handleCreateRoom,
     handleJoinRoom,
-    handleLeaveRoom,
-    handleDeleteRoom,
-    handleInviteMember,
-    handleAcceptInvite,
-    handleGetRooms
+    handleCreateRoom,
+    handleInviteToRoom,
+    handlePinMessage,
+    handleUnpinMessage
 }; 
