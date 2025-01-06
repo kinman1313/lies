@@ -40,14 +40,28 @@ const Chat = () => {
 
     const handleUpdatePreferences = async (preferences) => {
         try {
+            // Create a clean preferences object without any circular references
+            const cleanPreferences = {
+                theme: preferences.theme,
+                language: preferences.language,
+                notifications: preferences.notifications,
+                messageColor: preferences.messageColor,
+                bubbleStyle: preferences.bubbleStyle
+            };
+
             const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/me`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify({ preferences })
+                body: JSON.stringify({ preferences: cleanPreferences })
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
             if (data.user) {
                 updateUser(data.user);

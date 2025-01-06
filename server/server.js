@@ -36,7 +36,7 @@ app.use(cors({
             callback(new Error('Not allowed by CORS'));
         }
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
     optionsSuccessStatus: 200
@@ -46,7 +46,7 @@ app.use(cors({
 const io = socketIO(server, {
     cors: {
         origin: allowedOrigins,
-        methods: ["GET", "POST"],
+        methods: ["GET", "POST", "PUT", "PATCH"],
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true
     }
