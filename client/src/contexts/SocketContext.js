@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import io from 'socket.io-client';
+import { config } from '../config';
 
 const SocketContext = createContext();
 
@@ -14,10 +15,11 @@ export const SocketProvider = ({ children }) => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const newSocket = io('http://localhost:3001', {
+        const newSocket = io(config.SOCKET_URL, {
             auth: {
                 token
-            }
+            },
+            transports: ['websocket', 'polling']
         });
 
         newSocket.on('connect', () => {
