@@ -80,20 +80,20 @@ const MessageThread = ({
                 }}
             >
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                    <Avatar src={message.user.avatar?.url}>
-                        {message.user.username[0].toUpperCase()}
+                    <Avatar src={message?.user?.avatar?.url}>
+                        {message?.user?.username ? message.user.username[0].toUpperCase() : '?'}
                     </Avatar>
                     <Box sx={{ flexGrow: 1 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                             <Typography variant="subtitle2">
-                                {message.user.username}
+                                {message?.user?.username || 'Unknown User'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                                {formatTimestamp(message.timestamp)}
+                                {message?.timestamp ? formatTimestamp(message.timestamp) : 'Unknown time'}
                             </Typography>
                         </Box>
                         <Typography variant="body1">
-                            {message.text}
+                            {message?.text || ''}
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                             <Button
