@@ -22,13 +22,14 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import GifPicker from './GifPicker';
 import { config } from '../config';
-import io from 'socket.io-client';
 import { useTheme } from '@mui/material/styles';
 
 const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
     const { user } = useAuth();
+    const { socket } = useSocket();
     const [message, setMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
@@ -41,7 +42,6 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
     const recordingTimerRef = useRef(null);
     const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
     const [scheduledTime, setScheduledTime] = useState(null);
-    const socket = io();
     const theme = useTheme();
 
     const handleMessageChange = (e) => {

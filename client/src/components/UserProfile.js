@@ -31,7 +31,6 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
-import io from 'socket.io-client';
 import { useSocket } from '../contexts/SocketContext';
 
 const NOTIFICATION_SOUNDS = {
