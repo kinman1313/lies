@@ -4,110 +4,178 @@ import {
     TextField,
     IconButton,
     Tooltip,
-    CircularProgress,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    Button
+    Button,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Stack
 } from '@mui/material';
 import {
     Send as SendIcon,
     Gif as GifIcon,
     Mic as MicIcon,
-    AttachFile as AttachFileIcon,
     Schedule as ScheduleIcon,
+    AttachFile as AttachFileIcon,
+    Timer as TimerIcon,
     Stop as StopIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import GifPicker from './GifPicker';
+import { useSocket } from '../contexts/SocketContext';
 
-const MessageInput = ({ onSendMessage, isLoading }) => {
+const MessageInput = ({ roomId }) => {
+    const { socket } = useSocket();
     const [message, setMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
     const [showGifPicker, setShowGifPicker] = useState(false);
     const [showScheduler, setShowScheduler] = useState(false);
     const [scheduledTime, setScheduledTime] = useState(null);
-    const [mediaRecorder, setMediaRecorder] = useState(null);
+    const [showExpirationDialog, setShowExpirationDialog] = useState(false);
+    const [expirationMinutes, setExpirationMinutes] = useState(5);
+    const mediaRecorder = useRef(null);
+    const recordingInterval = useRef(null);
+    const audioChunks = useRef([]);
     const fileInputRef = useRef(null);
-    const chunks = useRef([]);
 
-    const handleSendMessage = (type = 'text', content = message, file = null) => {
-        if (!content.trim() && !file) return;
+    const handleSend = () => {
+        if (message.trim() || audioChunks.current.length > 0) {
+            const messageData = {
+                content: message.trim(),
+                type: 'text',
+                roomId
+            };
 
-        onSendMessage({
-            type,
-            content: content.trim(),
-            file,
-            scheduledFor: scheduledTime
-        });
-
-        setMessage('');
-        setShowGifPicker(false);
-        setShowScheduler(false);
-        setScheduledTime(null);
+            socket.emit('message', messageData);
+            setMessage('');
+        }
     };
 
-    const handleKeyPress = (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            handleSendMessage();
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
         }
     };
 
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
-            
-            recorder.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    chunks.current.push(e.data);
-                }
+            mediaRecorder.current = new MediaRecorder(stream);
+
+            mediaRecorder.current.ondataavailable = (event) => {
+                audioChunks.current.push(event.data);
             };
 
-            recorder.onstop = () => {
-                const blob = new Blob(chunks.current, { type: 'audio/webm' });
-                chunks.current = [];
-                
-                const file = new File([blob], 'voice-message.webm', { type: 'audio/webm' });
-                handleSendMessage('voice', 'Voice message', file);
+            mediaRecorder.current.onstop = async () => {
+                const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+                const file = new File([audioBlob], 'voice-message.wav', { type: 'audio/wav' });
+
+                const messageData = {
+                    content: '[VOICE]',
+                    type: 'voice',
+                    roomId,
+                    file
+                };
+
+                socket.emit('message', messageData);
+                audioChunks.current = [];
             };
 
-            recorder.start();
-            setMediaRecorder(recorder);
+            mediaRecorder.current.start();
             setIsRecording(true);
+            setRecordingTime(0);
+
+            recordingInterval.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+
         } catch (error) {
             console.error('Error starting recording:', error);
-            alert('Could not access microphone');
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        if (mediaRecorder.current && isRecording) {
+            mediaRecorder.current.stop();
+            mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
+            clearInterval(recordingInterval.current);
             setIsRecording(false);
+            setRecordingTime(0);
         }
     };
 
-    const handleFileSelect = (event) => {
+    const handleGifSelect = (gif) => {
+        const messageData = {
+            content: gif.url,
+            type: 'gif',
+            roomId,
+            metadata: {
+                gifId: gif.id,
+                title: gif.title
+            }
+        };
+
+        socket.emit('message', messageData);
+        setShowGifPicker(false);
+    };
+
+    const handleFileSelect = async (event) => {
         const file = event.target.files[0];
         if (file) {
-            handleSendMessage('file', file.name, file);
+            const messageData = {
+                content: file.name,
+                type: 'file',
+                roomId,
+                file
+            };
+
+            socket.emit('message', messageData);
+            fileInputRef.current.value = '';
         }
-        event.target.value = null; // Reset file input
     };
 
-    const handleGifSelect = (gifUrl) => {
-        handleSendMessage('gif', gifUrl);
+    const handleSchedule = () => {
+        if (scheduledTime && message.trim()) {
+            const messageData = {
+                content: message.trim(),
+                type: 'text',
+                roomId,
+                scheduledFor: scheduledTime.toISOString()
+            };
+
+            socket.emit('message', messageData);
+            setMessage('');
+            setScheduledTime(null);
+            setShowScheduler(false);
+        }
+    };
+
+    const handleSetExpiration = () => {
+        if (message.trim() && expirationMinutes > 0) {
+            const messageData = {
+                content: message.trim(),
+                type: 'text',
+                roomId,
+                expirationMinutes
+            };
+
+            socket.emit('message', messageData);
+            setMessage('');
+            setShowExpirationDialog(false);
+        }
     };
 
     return (
         <Box sx={{ p: 2, backgroundColor: 'background.paper' }}>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Stack direction="row" spacing={1} alignItems="center">
                 <TextField
                     fullWidth
                     multiline
@@ -116,71 +184,55 @@ const MessageInput = ({ onSendMessage, isLoading }) => {
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Type a message..."
-                    disabled={isLoading || isRecording}
-                    sx={{ backgroundColor: 'white' }}
+                    disabled={isRecording}
+                    sx={{ flexGrow: 1 }}
                 />
-                
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    style={{ display: 'none' }}
-                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
-                />
-
-                <Tooltip title="Attach file">
-                    <IconButton
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isLoading || isRecording}
-                    >
-                        <AttachFileIcon />
-                    </IconButton>
-                </Tooltip>
 
                 <Tooltip title="Send GIF">
-                    <IconButton
-                        onClick={() => setShowGifPicker(true)}
-                        disabled={isLoading || isRecording}
-                    >
+                    <IconButton onClick={() => setShowGifPicker(true)}>
                         <GifIcon />
                     </IconButton>
                 </Tooltip>
 
-                <Tooltip title={isRecording ? "Stop recording" : "Record voice message"}>
-                    <IconButton
-                        onClick={isRecording ? stopRecording : startRecording}
-                        color={isRecording ? "error" : "default"}
-                        disabled={isLoading}
-                    >
+                <Tooltip title={isRecording ? 'Stop Recording' : 'Record Voice Message'}>
+                    <IconButton onClick={isRecording ? stopRecording : startRecording} color={isRecording ? 'error' : 'default'}>
                         {isRecording ? <StopIcon /> : <MicIcon />}
                     </IconButton>
                 </Tooltip>
 
-                <Tooltip title="Schedule message">
-                    <IconButton
-                        onClick={() => setShowScheduler(true)}
-                        disabled={isLoading || isRecording}
-                    >
+                <Tooltip title="Schedule Message">
+                    <IconButton onClick={() => setShowScheduler(true)}>
                         <ScheduleIcon />
                     </IconButton>
                 </Tooltip>
 
-                <IconButton
-                    color="primary"
-                    onClick={() => handleSendMessage()}
-                    disabled={isLoading || isRecording || (!message.trim() && !scheduledTime)}
-                >
-                    {isLoading ? <CircularProgress size={24} /> : <SendIcon />}
-                </IconButton>
-            </Box>
+                <Tooltip title="Set Message Expiration">
+                    <IconButton onClick={() => setShowExpirationDialog(true)}>
+                        <TimerIcon />
+                    </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Attach File">
+                    <IconButton component="label">
+                        <AttachFileIcon />
+                        <input
+                            type="file"
+                            hidden
+                            onChange={handleFileSelect}
+                            ref={fileInputRef}
+                        />
+                    </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Send">
+                    <IconButton onClick={handleSend} disabled={!message.trim() && !isRecording}>
+                        <SendIcon />
+                    </IconButton>
+                </Tooltip>
+            </Stack>
 
             {/* GIF Picker Dialog */}
-            <Dialog
-                open={showGifPicker}
-                onClose={() => setShowGifPicker(false)}
-                maxWidth="md"
-                fullWidth
-            >
+            <Dialog open={showGifPicker} onClose={() => setShowGifPicker(false)} maxWidth="md" fullWidth>
                 <DialogTitle>Select a GIF</DialogTitle>
                 <DialogContent>
                     <GifPicker onSelect={handleGifSelect} />
@@ -188,10 +240,7 @@ const MessageInput = ({ onSendMessage, isLoading }) => {
             </Dialog>
 
             {/* Message Scheduler Dialog */}
-            <Dialog
-                open={showScheduler}
-                onClose={() => setShowScheduler(false)}
-            >
+            <Dialog open={showScheduler} onClose={() => setShowScheduler(false)}>
                 <DialogTitle>Schedule Message</DialogTitle>
                 <DialogContent>
                     <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -200,19 +249,39 @@ const MessageInput = ({ onSendMessage, isLoading }) => {
                             value={scheduledTime}
                             onChange={setScheduledTime}
                             minDateTime={new Date()}
-                            renderInput={(params) => <TextField {...params} fullWidth sx={{ mt: 2 }} />}
+                            renderInput={(params) => <TextField {...params} sx={{ mt: 2 }} />}
                         />
                     </LocalizationProvider>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setShowScheduler(false)}>Cancel</Button>
-                    <Button
-                        onClick={() => handleSendMessage()}
-                        disabled={!message.trim() || !scheduledTime}
-                        variant="contained"
-                    >
-                        Schedule
-                    </Button>
+                    <Button onClick={handleSchedule} variant="contained">Schedule</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Message Expiration Dialog */}
+            <Dialog open={showExpirationDialog} onClose={() => setShowExpirationDialog(false)}>
+                <DialogTitle>Set Message Expiration</DialogTitle>
+                <DialogContent>
+                    <FormControl fullWidth sx={{ mt: 2 }}>
+                        <InputLabel>Expire After</InputLabel>
+                        <Select
+                            value={expirationMinutes}
+                            onChange={(e) => setExpirationMinutes(e.target.value)}
+                            label="Expire After"
+                        >
+                            <MenuItem value={1}>1 minute</MenuItem>
+                            <MenuItem value={5}>5 minutes</MenuItem>
+                            <MenuItem value={10}>10 minutes</MenuItem>
+                            <MenuItem value={30}>30 minutes</MenuItem>
+                            <MenuItem value={60}>1 hour</MenuItem>
+                            <MenuItem value={1440}>24 hours</MenuItem>
+                        </Select>
+                    </FormControl>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setShowExpirationDialog(false)}>Cancel</Button>
+                    <Button onClick={handleSetExpiration} variant="contained">Set Expiration</Button>
                 </DialogActions>
             </Dialog>
         </Box>

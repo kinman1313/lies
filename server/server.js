@@ -3,9 +3,7 @@ const http = require('http');
 const socketIO = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const { handleMessage, handleReaction } = require('./socket/messageHandlers');
-const { handleJoin, handleDisconnect, handleTyping } = require('./socket/userHandlers');
-const fileUpload = require('express-fileupload');
+const { handleUpdateAvatar } = require('./socket/userHandlers');
 require('dotenv').config();
 
 // Connect to MongoDB
@@ -29,7 +27,9 @@ const allowedOrigins = [
 // CORS middleware configuration
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
+
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
@@ -42,29 +42,6 @@ app.use(cors({
     optionsSuccessStatus: 200
 }));
 
-// File upload middleware
-app.use(fileUpload({
-    createParentPath: true,
-    limits: {
-        fileSize: 50 * 1024 * 1024 // 50MB max file size
-    },
-    abortOnLimit: true
-}));
-
-app.use(express.json());
-app.use('/uploads', express.static('uploads'));
-
-// Import routes
-const userRoutes = require('./routes/users');
-const messageRoutes = require('./routes/messages');
-app.use('/api/users', userRoutes);
-app.use('/api/messages', messageRoutes);
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
-});
-
 // Socket.IO CORS configuration
 const io = socketIO(server, {
     cors: {
@@ -75,43 +52,73 @@ const io = socketIO(server, {
     }
 });
 
-// Socket middleware for authentication
-io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-        return next(new Error('Authentication error'));
-    }
-    // Verify token and attach user to socket
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        socket.user = decoded;
-        next();
-    } catch (err) {
-        next(new Error('Authentication error'));
-    }
+app.use(express.json());
+
+// Import routes
+const userRoutes = require('./routes/users');
+app.use('/api/users', userRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
 });
+
+// Store connected users
+const users = new Map();
 
 io.on('connection', (socket) => {
-    console.log('New client connected:', socket.user.username);
+    console.log('New client connected');
 
-    // Join room
-    socket.on('join', (data) => handleJoin(io, socket, data));
+    socket.on('join', (username) => {
+        socket.username = username; // Store username in socket for later use
+        users.set(socket.id, username);
+        io.emit('userJoined', { username, users: Array.from(users.values()) });
+    });
 
-    // Handle messages
-    socket.on('message', (data) => handleMessage(io, socket, data));
+    socket.on('message', (message) => {
+        const username = users.get(socket.id);
+        const messageData = {
+            text: message,
+            username,
+            timestamp: new Date().toISOString(),
+            reactions: []
+        };
+        io.emit('message', messageData);
+    });
 
-    // Handle reactions
-    socket.on('reaction', (data) => handleReaction(io, socket, data));
+    socket.on('typing', ({ username }) => {
+        io.emit('typing', { username });
+    });
 
-    // Handle typing indicators
-    socket.on('typing', (data) => handleTyping(io, socket, data, true));
-    socket.on('stopTyping', (data) => handleTyping(io, socket, data, false));
+    socket.on('stopTyping', ({ username }) => {
+        io.emit('stopTyping', { username });
+    });
 
-    // Handle disconnection
-    socket.on('disconnect', () => handleDisconnect(io, socket));
+    socket.on('reaction', ({ messageId, emoji, username }) => {
+        io.emit('reaction', { messageId, emoji, username });
+    });
+
+    socket.on('removeReaction', ({ messageId, emoji, username }) => {
+        io.emit('removeReaction', { messageId, emoji, username });
+    });
+
+    socket.on('updateAvatar', (data) => handleUpdateAvatar(io, socket, data));
+
+    socket.on('disconnect', () => {
+        const username = users.get(socket.id);
+        users.delete(socket.id);
+        io.emit('userLeft', { username, users: Array.from(users.values()) });
+        console.log('Client disconnected');
+    });
 });
 
-const PORT = process.env.PORT || 5000;
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
+});
+
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 }); 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Paper,
@@ -14,8 +14,7 @@ import {
     List,
     ListItem,
     ListItemText,
-    ListItemAvatar,
-    CircularProgress
+    ListItemAvatar
 } from '@mui/material';
 import {
     Reply as ReplyIcon,
@@ -29,7 +28,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import MessageBubble from './MessageBubble';
 import MessageReactions from './MessageReactions';
-import { formatDistanceToNow } from 'date-fns';
 
 const MessageThread = ({
     message,
@@ -45,24 +43,27 @@ const MessageThread = ({
     const [expanded, setExpanded] = useState(false);
     const [replyText, setReplyText] = useState('');
     const [showReplyInput, setShowReplyInput] = useState(false);
-    const replyInputRef = useRef(null);
-
-    useEffect(() => {
-        if (showReplyInput && replyInputRef.current) {
-            replyInputRef.current.focus();
-        }
-    }, [showReplyInput]);
 
     const handleReply = () => {
         if (replyText.trim()) {
             onReply({
-                content: replyText,
-                replyTo: message._id,
-                type: 'text'
+                text: replyText,
+                replyTo: message.id,
+                timestamp: new Date(),
+                user: {
+                    id: currentUser.id,
+                    username: currentUser.username,
+                    avatar: currentUser.profile?.avatar
+                }
             });
             setReplyText('');
             setShowReplyInput(false);
+            setExpanded(true);
         }
+    };
+
+    const formatTimestamp = (timestamp) => {
+        return new Date(timestamp).toLocaleString();
     };
 
     const handleKeyPress = (event) => {
@@ -72,122 +73,163 @@ const MessageThread = ({
         }
     };
 
-    const renderMessageContent = () => {
-        switch (message.type) {
-            case 'gif':
-                return (
-                    <Box sx={{ maxWidth: '300px', borderRadius: 2, overflow: 'hidden' }}>
-                        <img src={message.content} alt="GIF" style={{ width: '100%', height: 'auto' }} />
-                    </Box>
-                );
-            case 'voice':
-                return (
-                    <Box>
-                        <audio controls src={message.fileUrl}>
-                            Your browser does not support the audio element.
-                        </audio>
-                    </Box>
-                );
-            case 'file':
-                return (
-                    <Box>
-                        <Button
-                            variant="outlined"
-                            href={message.fileUrl}
-                            target="_blank"
-                            startIcon={<Icon>attachment</Icon>}
-                        >
-                            {message.fileName || 'Download File'}
-                        </Button>
-                    </Box>
-                );
-            default:
-                return <Typography>{message.content}</Typography>;
-        }
-    };
-
     return (
         <Box sx={{ mb: 2 }}>
             <Paper
-                elevation={1}
+                variant="outlined"
                 sx={{
                     p: 2,
-                    backgroundColor: message.userId === currentUser?._id ? '#e3f2fd' : '#fff'
+                    bgcolor: 'background.paper',
+                    position: 'relative'
                 }}
             >
-                <Box display="flex" alignItems="flex-start" gap={1}>
-                    <ListItemAvatar>
-                        <Avatar src={message.userAvatar}>{message.username[0]}</Avatar>
-                    </ListItemAvatar>
-                    <Box flex={1}>
-                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                            <Typography variant="subtitle2" color="textSecondary">
-                                {message.username}
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                    <Avatar src={message?.user?.avatar?.url}>
+                        {message?.user?.username ? message.user.username[0].toUpperCase() : '?'}
+                    </Avatar>
+                    <Box sx={{ flexGrow: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            <Typography variant="subtitle2">
+                                {message?.user?.username || 'Unknown User'}
                             </Typography>
-                            <Typography variant="caption" color="textSecondary">
-                                {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
+                            <Typography variant="caption" color="text.secondary">
+                                {message?.timestamp ? formatTimestamp(message.timestamp) : 'Unknown time'}
                             </Typography>
                         </Box>
-                        {renderMessageContent()}
-                        <MessageReactions
-                            reactions={message.reactions}
-                            onAddReaction={onAddReaction}
-                            onRemoveReaction={onRemoveReaction}
-                            messageId={message._id}
+                        <MessageBubble
+                            message={message}
+                            isOwn={message?.user?.id === currentUser?.id}
                         />
-                    </Box>
-                </Box>
-            </Paper>
-
-            {replies.length > 0 && (
-                <>
-                    <IconButton size="small" onClick={() => setExpanded(!expanded)}>
-                        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
-                    <Collapse in={expanded}>
-                        <List>
-                            {replies.map((reply) => (
-                                <ListItem key={reply._id}>
-                                    <MessageBubble message={reply} />
-                                </ListItem>
-                            ))}
-                            {hasMoreReplies && (
+                        <Box sx={{ mt: 1, mb: 1 }}>
+                            <MessageReactions
+                                reactions={message.reactions || []}
+                                onAddReaction={(emoji) => onAddReaction(message.id, emoji)}
+                                onRemoveReaction={(emoji) => onRemoveReaction(message.id, emoji)}
+                                currentUserId={currentUser?.id}
+                            />
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                            <Button
+                                size="small"
+                                startIcon={<ReplyIcon />}
+                                onClick={() => setShowReplyInput(!showReplyInput)}
+                                sx={{ mr: 2 }}
+                            >
+                                Reply
+                            </Button>
+                            {replies.length > 0 && (
                                 <Button
-                                    onClick={onLoadMore}
-                                    disabled={isLoadingReplies}
-                                    startIcon={isLoadingReplies && <CircularProgress size={20} />}
+                                    size="small"
+                                    startIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                    onClick={() => setExpanded(!expanded)}
                                 >
-                                    Load More Replies
+                                    {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
                                 </Button>
                             )}
-                        </List>
-                    </Collapse>
-                </>
-            )}
-
-            {showReplyInput ? (
-                <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Type your reply..."
-                        inputRef={replyInputRef}
-                    />
-                    <IconButton color="primary" onClick={handleReply}>
-                        <SendIcon />
-                    </IconButton>
-                    <IconButton onClick={() => setShowReplyInput(false)}>
-                        <CloseIcon />
-                    </IconButton>
+                        </Box>
+                    </Box>
                 </Box>
-            ) : (
-                <IconButton size="small" onClick={() => setShowReplyInput(true)}>
-                    <ReplyIcon />
-                </IconButton>
-            )}
+
+                <AnimatePresence>
+                    {showReplyInput && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                        >
+                            <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                                <Avatar
+                                    src={currentUser?.profile?.avatar?.url}
+                                    sx={{ width: 32, height: 32 }}
+                                >
+                                    {currentUser?.username ? currentUser.username[0].toUpperCase() : '?'}
+                                </Avatar>
+                                <Box sx={{ flexGrow: 1 }}>
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        maxRows={4}
+                                        placeholder="Write a reply..."
+                                        value={replyText}
+                                        onChange={(e) => setReplyText(e.target.value)}
+                                        onKeyPress={handleKeyPress}
+                                        size="small"
+                                        InputProps={{
+                                            endAdornment: (
+                                                <IconButton
+                                                    onClick={handleReply}
+                                                    disabled={!replyText.trim()}
+                                                    color="primary"
+                                                >
+                                                    <SendIcon />
+                                                </IconButton>
+                                            )
+                                        }}
+                                    />
+                                </Box>
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setShowReplyInput(false)}
+                                >
+                                    <CloseIcon />
+                                </IconButton>
+                            </Box>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <Collapse in={expanded}>
+                    {replies.length > 0 && (
+                        <Box sx={{ mt: 2, ml: 6 }}>
+                            <List disablePadding>
+                                {replies.map((reply, index) => (
+                                    <React.Fragment key={reply.id}>
+                                        <ListItem
+                                            alignItems="flex-start"
+                                            sx={{ px: 0 }}
+                                        >
+                                            <ListItemAvatar>
+                                                <Avatar
+                                                    src={reply?.user?.avatar?.url}
+                                                    sx={{ width: 32, height: 32 }}
+                                                >
+                                                    {reply?.user?.username ? reply.user.username[0].toUpperCase() : '?'}
+                                                </Avatar>
+                                            </ListItemAvatar>
+                                            <ListItemText
+                                                primary={
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <Typography variant="subtitle2">
+                                                            {reply?.user?.username || 'Unknown User'}
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {reply?.timestamp ? formatTimestamp(reply.timestamp) : 'Unknown time'}
+                                                        </Typography>
+                                                    </Box>
+                                                }
+                                                secondary={reply?.text || ''}
+                                            />
+                                        </ListItem>
+                                        {index < replies.length - 1 && (
+                                            <Divider variant="inset" component="li" />
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </List>
+                            {hasMoreReplies && (
+                                <Button
+                                    fullWidth
+                                    onClick={onLoadMore}
+                                    disabled={isLoadingReplies}
+                                    sx={{ mt: 1 }}
+                                >
+                                    {isLoadingReplies ? 'Loading...' : 'Load more replies'}
+                                </Button>
+                            )}
+                        </Box>
+                    )}
+                </Collapse>
+            </Paper>
         </Box>
     );
 };
