@@ -76,20 +76,52 @@ const UserProfile = ({ open, onClose }) => {
 
     const handleSave = async () => {
         try {
+            let avatarUrl = avatar;
+
+            // If there's a new avatar, upload it first
+            if (newAvatar) {
+                const formData = new FormData();
+                formData.append('file', newAvatar);
+
+                const response = await fetch(`${config.API_URL}/api/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to upload avatar');
+                }
+
+                const data = await response.json();
+                avatarUrl = data.fileUrl;
+            }
+
+            // Update profile with new data
             await updateProfile({
                 username,
-                avatar: newAvatar || avatar,
+                avatar: avatarUrl,
                 preferences
             });
 
             // Save notification preferences
-            localStorage.setItem('notificationsEnabled', notificationsEnabled);
-            localStorage.setItem('soundEnabled', soundEnabled);
+            localStorage.setItem('notificationsEnabled', notificationsEnabled.toString());
+            localStorage.setItem('soundEnabled', soundEnabled.toString());
             localStorage.setItem('notificationSound', notificationSound);
 
+            // Emit profile update event
+            socket.emit('profileUpdate', {
+                username,
+                avatar: avatarUrl,
+                preferences
+            });
+
+            // Reset state and close dialog
+            setNewAvatar(null);
             onClose();
         } catch (error) {
             console.error('Error updating profile:', error);
+            // Show error to user (you'll need to add error state and display)
         }
     };
 

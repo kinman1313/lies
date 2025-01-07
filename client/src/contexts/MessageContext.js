@@ -1,330 +1,105 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
-import { debounce } from 'lodash';
 
-const MessageContext = createContext(null);
+const MessageContext = createContext();
 
-export const useMessages = () => {
-    const context = useContext(MessageContext);
-    if (!context) {
-        throw new Error('useMessages must be used within a MessageProvider');
-    }
-    return context;
-};
+export const useMessages = () => useContext(MessageContext);
 
 export const MessageProvider = ({ children }) => {
-    const { socket } = useSocket();
-    const { user } = useAuth();
     const [messages, setMessages] = useState([]);
-    const [pinnedMessages, setPinnedMessages] = useState([]);
-    const [typingUsers, setTypingUsers] = useState([]);
-    const [scheduledMessages, setScheduledMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-
-    const handleError = useCallback((error) => {
-        console.error('Message operation failed:', error);
-        setError(error.message || 'An error occurred');
-        setLoading(false);
-    }, []);
-
-    // Debounced typing indicator
-    const debouncedEmitTyping = useCallback(
-        debounce((isTyping) => {
-            if (socket && user) {
-                socket.emit(isTyping ? 'typing' : 'stopTyping', { username: user.username });
-            }
-        }, 300),
-        [socket, user]
-    );
+    const { socket } = useSocket();
+    const { user } = useAuth();
 
     useEffect(() => {
-        if (!socket) return;
-
-        // Message handlers with error handling
-        socket.on('message', (message) => {
-            try {
-                setMessages(prev => [...prev, message]);
-                setError(null);
-            } catch (err) {
-                handleError(err);
-            }
-        });
-
-        socket.on('messageUpdated', (updatedMessage) => {
-            try {
-                setMessages(prev => prev.map(msg =>
-                    msg._id === updatedMessage._id ? updatedMessage : msg
-                ));
-                setError(null);
-            } catch (err) {
-                handleError(err);
-            }
-        });
-
-        socket.on('messageDeleted', (messageId) => {
-            try {
-                setMessages(prev => prev.filter(msg => msg._id !== messageId));
-                setPinnedMessages(prev => prev.filter(msg => msg._id !== messageId));
-                setError(null);
-            } catch (err) {
-                handleError(err);
-            }
-        });
-
-        // Pinned message handlers
-        socket.on('messagePinned', (message) => {
-            try {
-                setPinnedMessages(prev => [...prev, message]);
-                // Update the message in the main messages list
-                setMessages(prev => prev.map(msg =>
-                    msg._id === message._id ? { ...msg, isPinned: true } : msg
-                ));
-                setError(null);
-            } catch (err) {
-                handleError(err);
-            }
-        });
-
-        socket.on('messageUnpinned', (messageId) => {
-            try {
-                setPinnedMessages(prev => prev.filter(msg => msg._id !== messageId));
-                // Update the message in the main messages list
-                setMessages(prev => prev.map(msg =>
-                    msg._id === messageId ? { ...msg, isPinned: false } : msg
-                ));
-                setError(null);
-            } catch (err) {
-                handleError(err);
-            }
-        });
-
-        // Typing indicators
-        socket.on('typing', ({ username }) => {
-            if (username !== user?.username) {
-                setTypingUsers(prev => [...new Set([...prev, username])]);
-            }
-        });
-
-        socket.on('stopTyping', ({ username }) => {
-            setTypingUsers(prev => prev.filter(user => user !== username));
-        });
-
-        // Scheduled messages
-        socket.on('messageScheduled', ({ scheduledMessage, error }) => {
-            if (error) {
-                handleError(new Error(error));
-            } else {
-                setScheduledMessages(prev => [...prev, scheduledMessage]);
-                setError(null);
-            }
-        });
-
-        // Message reactions
-        socket.on('messageReaction', ({ messageId, reaction, username }) => {
-            try {
-                setMessages(prev => prev.map(msg => {
-                    if (msg._id === messageId) {
-                        const reactions = msg.reactions || [];
-                        const existingReaction = reactions.findIndex(r =>
-                            r.emoji === reaction && r.username === username
-                        );
-
-                        if (existingReaction >= 0) {
-                            // Remove reaction
-                            return {
-                                ...msg,
-                                reactions: reactions.filter((_, i) => i !== existingReaction)
-                            };
-                        } else {
-                            // Add reaction
-                            return {
-                                ...msg,
-                                reactions: [...reactions, { emoji: reaction, username }]
-                            };
-                        }
-                    }
-                    return msg;
-                }));
-                setError(null);
-            } catch (err) {
-                handleError(err);
-            }
-        });
+        if (!socket || !user) return;
 
         // Load initial messages
-        const loadInitialMessages = async () => {
-            try {
-                setLoading(true);
-                socket.emit('getMessages', {}, (response) => {
-                    if (response.error) {
-                        handleError(new Error(response.error));
-                    } else {
-                        setMessages(response.messages || []);
-                        setPinnedMessages(response.pinnedMessages || []);
-                        setScheduledMessages(response.scheduledMessages || []);
-                        setError(null);
-                    }
-                    setLoading(false);
-                });
-            } catch (err) {
-                handleError(err);
-                setLoading(false);
+        socket.emit('getMessages', {}, (response) => {
+            if (response.success) {
+                setMessages(response.messages);
+            } else {
+                setError('Failed to load messages');
             }
-        };
+            setLoading(false);
+        });
 
-        loadInitialMessages();
+        // Listen for new messages
+        socket.on('newMessage', (message) => {
+            setMessages(prev => [...prev, message]);
+        });
+
+        // Listen for message updates
+        socket.on('messageUpdate', ({ messageId, update }) => {
+            setMessages(prev => prev.map(msg =>
+                msg.id === messageId ? { ...msg, ...update } : msg
+            ));
+        });
+
+        // Listen for voice message status updates
+        socket.on('voiceMessageStatus', ({ messageId, status, url }) => {
+            setMessages(prev => prev.map(msg =>
+                msg.id === messageId ? { ...msg, status, content: url } : msg
+            ));
+        });
 
         return () => {
-            socket.off('message');
-            socket.off('messageUpdated');
-            socket.off('messageDeleted');
-            socket.off('messagePinned');
-            socket.off('messageUnpinned');
-            socket.off('typing');
-            socket.off('stopTyping');
-            socket.off('messageScheduled');
-            socket.off('messageReaction');
+            socket.off('newMessage');
+            socket.off('messageUpdate');
+            socket.off('voiceMessageStatus');
         };
     }, [socket, user]);
 
-    const sendMessage = async (content) => {
-        if (!socket) return;
-        try {
-            return new Promise((resolve, reject) => {
-                socket.emit('message', content, (response) => {
-                    if (response.error) {
-                        handleError(new Error(response.error));
-                        reject(response.error);
-                    } else {
-                        resolve(response);
-                    }
-                });
+    const sendMessage = async (messageData) => {
+        if (!socket) throw new Error('Socket not connected');
+
+        return new Promise((resolve, reject) => {
+            const tempId = Date.now().toString();
+            const newMessage = {
+                id: tempId,
+                sender: user.id,
+                timestamp: new Date().toISOString(),
+                status: 'sending',
+                ...messageData
+            };
+
+            // Add message to local state immediately
+            setMessages(prev => [...prev, newMessage]);
+
+            // Send to server
+            socket.emit('sendMessage', messageData, (response) => {
+                if (response.success) {
+                    // Update the temporary message with server data
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === tempId ? { ...msg, ...response.message } : msg
+                    ));
+                    resolve(response.message);
+                } else {
+                    // Mark message as failed
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === tempId ? { ...msg, status: 'failed' } : msg
+                    ));
+                    reject(new Error(response.error));
+                }
             });
-        } catch (err) {
-            handleError(err);
-            throw err;
-        }
+        });
     };
 
-    const scheduleMessage = async (message, scheduledFor) => {
-        if (!socket) return;
-        try {
-            return new Promise((resolve, reject) => {
-                socket.emit('scheduleMessage', { ...message, scheduledFor }, (response) => {
-                    if (response.error) {
-                        handleError(new Error(response.error));
-                        reject(response.error);
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-        } catch (err) {
-            handleError(err);
-            throw err;
-        }
-    };
-
-    const pinMessage = async (messageId) => {
-        if (!socket) return;
-        try {
-            return new Promise((resolve, reject) => {
-                socket.emit('pin', { messageId }, (response) => {
-                    if (response.error) {
-                        handleError(new Error(response.error));
-                        reject(response.error);
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-        } catch (err) {
-            handleError(err);
-            throw err;
-        }
-    };
-
-    const deleteMessage = async (messageId) => {
-        if (!socket) return;
-        try {
-            return new Promise((resolve, reject) => {
-                socket.emit('deleteMessage', { messageId }, (response) => {
-                    if (response.error) {
-                        handleError(new Error(response.error));
-                        reject(response.error);
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-        } catch (err) {
-            handleError(err);
-            throw err;
-        }
-    };
-
-    const setMessageExpiry = async (messageId, expiryTime) => {
-        if (!socket) return;
-        try {
-            return new Promise((resolve, reject) => {
-                socket.emit('setMessageExpiry', { messageId, expiryTime }, (response) => {
-                    if (response.error) {
-                        handleError(new Error(response.error));
-                        reject(response.error);
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-        } catch (err) {
-            handleError(err);
-            throw err;
-        }
-    };
-
-    const addReaction = async (messageId, reaction) => {
-        if (!socket) return;
-        try {
-            return new Promise((resolve, reject) => {
-                socket.emit('addReaction', { messageId, reaction }, (response) => {
-                    if (response.error) {
-                        handleError(new Error(response.error));
-                        reject(response.error);
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-        } catch (err) {
-            handleError(err);
-            throw err;
-        }
-    };
-
-    const handleTyping = (isTyping) => {
-        debouncedEmitTyping(isTyping);
-    };
-
-    const value = {
-        messages,
-        pinnedMessages,
-        scheduledMessages,
-        typingUsers,
-        loading,
-        error,
-        sendMessage,
-        scheduleMessage,
-        pinMessage,
-        deleteMessage,
-        setMessageExpiry,
-        addReaction,
-        handleTyping
+    const handleError = (error) => {
+        console.error('MessageContext error:', error);
+        setError(error.message);
     };
 
     return (
-        <MessageContext.Provider value={value}>
+        <MessageContext.Provider value={{
+            messages,
+            loading,
+            error,
+            sendMessage,
+            handleError
+        }}>
             {children}
         </MessageContext.Provider>
     );

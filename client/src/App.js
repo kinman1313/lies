@@ -6,18 +6,28 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { MessageProvider } from './contexts/MessageContext';
 import Chat from './components/Chat';
+import { Box } from '@mui/material';
 
 function App() {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
-            <AuthProvider>
-                <SocketProvider>
-                    <MessageProvider>
-                        <Chat />
-                    </MessageProvider>
-                </SocketProvider>
-            </AuthProvider>
+            <Box sx={{
+                height: '100vh',
+                width: '100vw',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                bgcolor: 'background.default'
+            }}>
+                <AuthProvider>
+                    <SocketProvider>
+                        <MessageProvider>
+                            <Chat />
+                        </MessageProvider>
+                    </SocketProvider>
+                </AuthProvider>
+            </Box>
         </ThemeProvider>
     );
 }

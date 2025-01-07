@@ -30,7 +30,7 @@ import ChatRoom from './ChatRoom';
 import ChatLobby from './ChatLobby';
 import UserProfile from './UserProfile';
 
-const DRAWER_WIDTH = 240;
+const DRAWER_WIDTH = 280;
 
 const Chat = () => {
     const { user, logout } = useAuth();
@@ -65,17 +65,12 @@ const Chat = () => {
 
     return (
         <Box sx={{
-            height: '100vh',
             display: 'flex',
-            background: theme.palette.background.default,
-            backgroundImage: `
-                radial-gradient(at 40% 20%, rgba(124, 77, 255, 0.15) 0px, transparent 50%),
-                radial-gradient(at 80% 0%, rgba(0, 229, 255, 0.1) 0px, transparent 50%),
-                radial-gradient(at 0% 50%, rgba(124, 77, 255, 0.1) 0px, transparent 50%)
-            `,
-            backgroundAttachment: 'fixed'
+            height: '100vh',
+            width: '100vw',
+            overflow: 'hidden'
         }}>
-            {/* Sidebar Drawer */}
+            {/* Sidebar */}
             <Drawer
                 variant={isMobile ? 'temporary' : 'permanent'}
                 open={isMobile ? drawerOpen : true}
@@ -88,9 +83,8 @@ const Chat = () => {
                         boxSizing: 'border-box',
                         background: 'rgba(19, 47, 76, 0.95)',
                         backdropFilter: 'blur(20px)',
-                        borderRight: '1px solid rgba(255, 255, 255, 0.1)',
-                        boxShadow: '4px 0 30px rgba(0, 0, 0, 0.2)'
-                    },
+                        borderRight: '1px solid rgba(255, 255, 255, 0.1)'
+                    }
                 }}
             >
                 <Box sx={{
@@ -285,6 +279,34 @@ const Chat = () => {
                     </Alert>
                 </Snackbar>
             </Drawer>
+
+            {/* Main content */}
+            <Box sx={{
+                flexGrow: 1,
+                height: '100vh',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                ml: isMobile ? 0 : `${DRAWER_WIDTH}px`
+            }}>
+                {activeRoom ? (
+                    <ChatRoom
+                        roomId={activeRoom}
+                        onLeaveRoom={() => setActiveRoom(null)}
+                        onClose={() => setActiveRoom(null)}
+                    />
+                ) : (
+                    <ChatLobby
+                        onCreateRoom={(roomId) => setActiveRoom(roomId)}
+                    />
+                )}
+            </Box>
+
+            {/* Profile Dialog */}
+            <UserProfile
+                open={profileOpen}
+                onClose={() => setProfileOpen(false)}
+            />
         </Box>
     );
 };

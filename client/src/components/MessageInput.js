@@ -124,6 +124,17 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
 
                 try {
                     setIsUploading(true);
+                    // Add temporary message immediately
+                    const tempMessage = {
+                        type: 'voice',
+                        content: 'uploading',
+                        metadata: {
+                            duration: recordingTime
+                        },
+                        status: 'uploading'
+                    };
+                    onSendMessage(tempMessage);
+
                     const response = await fetch(`${config.API_URL}/api/upload`, {
                         method: 'POST',
                         body: formData,
@@ -138,10 +149,12 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
                         content: fileUrl,
                         metadata: {
                             duration: recordingTime
-                        }
+                        },
+                        status: 'sent'
                     });
                 } catch (error) {
                     console.error('Error uploading voice message:', error);
+                    // Show error to user
                 } finally {
                     setIsUploading(false);
                 }
@@ -156,6 +169,7 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
             }, 1000);
         } catch (error) {
             console.error('Error starting recording:', error);
+            // Show error to user
         }
     };
 
