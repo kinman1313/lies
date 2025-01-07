@@ -36,7 +36,7 @@ services:
       - key: UPLOAD_PATH
         value: /opt/render/project/src/server/uploads
 
-  - type: web
+  - type: static
     name: lies-client
     env: static
     buildCommand: cd client && rm -rf node_modules && npm install && npm run build
