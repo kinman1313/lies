@@ -1,48 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const validator = require('validator');
 const jwt = require('jsonwebtoken');
-
-const profileSchema = new mongoose.Schema({
-    displayName: {
-        type: String,
-        trim: true
-    },
-    bio: {
-        type: String,
-        trim: true,
-        maxLength: 500
-    },
-    avatar: {
-        url: String,
-        color: String
-    },
-    status: {
-        text: {
-            type: String,
-            trim: true,
-            maxLength: 100
-        },
-        emoji: String,
-        expiresAt: Date
-    },
-    links: [{
-        platform: {
-            type: String,
-            enum: ['github', 'twitter', 'linkedin', 'website'],
-            required: true
-        },
-        url: {
-            type: String,
-            required: true
-        }
-    }],
-    timezone: String,
-    language: {
-        type: String,
-        default: 'en'
-    }
-});
 
 const userSchema = new mongoose.Schema({
     username: {
@@ -50,14 +8,8 @@ const userSchema = new mongoose.Schema({
         required: true,
         unique: true,
         trim: true,
-        minLength: 3,
-        maxLength: 30,
-        validate: {
-            validator: function (v) {
-                return /^[a-zA-Z0-9_-]+$/.test(v);
-            },
-            message: 'Username can only contain letters, numbers, underscores, and hyphens'
-        }
+        minlength: 3,
+        maxlength: 30
     },
     email: {
         type: String,
@@ -65,48 +17,32 @@ const userSchema = new mongoose.Schema({
         unique: true,
         trim: true,
         lowercase: true,
-        validate: {
-            validator: validator.isEmail,
-            message: 'Invalid email format'
-        }
+        match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
     },
     password: {
         type: String,
         required: true,
-        minLength: 8
+        minlength: 6
     },
-    resetPasswordToken: String,
-    resetPasswordExpires: Date,
-    profile: profileSchema,
-    friends: [{
-        user: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
-        },
-        status: {
-            type: String,
-            enum: ['pending', 'accepted', 'blocked'],
-            default: 'pending'
-        },
-        addedAt: {
-            type: Date,
-            default: Date.now
-        }
-    }],
+    avatar: {
+        type: String,
+        default: '/default-avatar.png'
+    },
+    status: {
+        type: String,
+        enum: ['online', 'offline', 'away', 'busy'],
+        default: 'offline'
+    },
+    bio: {
+        type: String,
+        trim: true,
+        maxlength: 200
+    },
     preferences: {
         theme: {
             type: String,
-            enum: ['light', 'dark', 'system'],
-            default: 'system'
-        },
-        messageColor: {
-            type: String,
-            default: '#7C4DFF'
-        },
-        bubbleStyle: {
-            type: String,
-            enum: ['modern', 'classic', 'minimal'],
-            default: 'modern'
+            enum: ['light', 'dark'],
+            default: 'light'
         },
         notifications: {
             sound: {
@@ -119,90 +55,148 @@ const userSchema = new mongoose.Schema({
             },
             email: {
                 type: Boolean,
-                default: false
+                default: true
             }
         },
-        privacy: {
-            showOnlineStatus: {
-                type: Boolean,
-                default: true
+        messagePreferences: {
+            fontSize: {
+                type: Number,
+                default: 14
             },
-            allowFriendRequests: {
-                type: Boolean,
-                default: true
-            },
-            allowMentions: {
+            bubbleColor: {
                 type: String,
-                enum: ['everyone', 'friends', 'none'],
-                default: 'everyone'
+                default: '#007AFF'
+            },
+            showTimestamps: {
+                type: Boolean,
+                default: true
             }
         }
     },
-    lastSeen: Date,
-    isOnline: {
+    lastSeen: {
+        type: Date
+    },
+    isVerified: {
         type: Boolean,
         default: false
     },
-    tokens: [{
-        token: {
-            type: String,
-            required: true
-        },
-        device: String,
-        lastUsed: Date
-    }]
+    verificationToken: String,
+    resetPasswordToken: String,
+    resetPasswordExpires: Date
 }, {
     timestamps: true
 });
 
+// Indexes
+userSchema.index({ username: 'text', email: 'text' });
+userSchema.index({ status: 1 });
+userSchema.index({ isVerified: 1 });
+
 // Hash password before saving
 userSchema.pre('save', async function (next) {
-    const user = this;
-    if (user.isModified('password')) {
-        user.password = await bcrypt.hash(user.password, 8);
+    if (!this.isModified('password')) {
+        return next();
     }
-    next();
+
+    try {
+        const salt = await bcrypt.genSalt(10);
+        this.password = await bcrypt.hash(this.password, salt);
+        next();
+    } catch (error) {
+        next(error);
+    }
 });
 
-// Method to check password
-userSchema.methods.checkPassword = async function (password) {
-    return bcrypt.compare(password, this.password);
+// Methods
+userSchema.methods.comparePassword = async function (candidatePassword) {
+    return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to generate auth token
-userSchema.methods.generateAuthToken = async function () {
-    const user = this;
-    const token = jwt.sign({ _id: user._id.toString() }, process.env.JWT_SECRET);
-    user.tokens = user.tokens.concat({ token });
-    await user.save();
-    return token;
+userSchema.methods.generateAuthToken = function () {
+    return jwt.sign(
+        { _id: this._id, username: this.username },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+    );
 };
 
-// Add indexes for faster searches
-userSchema.index({ username: 'text', 'profile.displayName': 'text' });
-userSchema.index({ email: 1 });
-userSchema.index({ isOnline: 1 });
-userSchema.index({ 'friends.user': 1, 'friends.status': 1 });
-userSchema.index({ resetPasswordToken: 1, resetPasswordExpires: 1 });
+userSchema.methods.generateVerificationToken = function () {
+    this.verificationToken = jwt.sign(
+        { _id: this._id },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+    );
+    return this.save();
+};
 
-// Password validation
-userSchema.path('password').validate(function (password) {
-    return password.length >= 8 &&
-        /[A-Z]/.test(password) &&
-        /[a-z]/.test(password) &&
-        /[0-9]/.test(password);
-}, 'Password must be at least 8 characters long and contain uppercase, lowercase, and numbers');
+userSchema.methods.generatePasswordResetToken = function () {
+    this.resetPasswordToken = jwt.sign(
+        { _id: this._id },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+    );
+    this.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    return this.save();
+};
 
-// Find user by credentials
-userSchema.statics.findByCredentials = async (email, password) => {
-    const user = await User.findOne({ email });
+userSchema.methods.updateProfile = async function (profileData) {
+    const allowedUpdates = ['username', 'bio', 'avatar'];
+    Object.keys(profileData).forEach(update => {
+        if (allowedUpdates.includes(update)) {
+            this[update] = profileData[update];
+        }
+    });
+    return this.save();
+};
+
+userSchema.methods.updatePreferences = async function (preferences) {
+    this.preferences = { ...this.preferences, ...preferences };
+    return this.save();
+};
+
+userSchema.methods.updateStatus = async function (status) {
+    this.status = status;
+    this.lastSeen = new Date();
+    return this.save();
+};
+
+// Statics
+userSchema.statics.findByCredentials = async function (email, password) {
+    const user = await this.findOne({ email });
     if (!user) {
         throw new Error('Invalid login credentials');
     }
-    const isMatch = await bcrypt.compare(password, user.password);
+
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
         throw new Error('Invalid login credentials');
     }
+
+    return user;
+};
+
+userSchema.statics.search = function (query) {
+    return this.find(
+        { $text: { $search: query } },
+        { score: { $meta: 'textScore' } }
+    )
+        .select('-password')
+        .sort({ score: { $meta: 'textScore' } });
+};
+
+userSchema.statics.findOnlineUsers = function () {
+    return this.find({ status: 'online' })
+        .select('-password')
+        .sort({ username: 1 });
+};
+
+// Remove sensitive information when converting to JSON
+userSchema.methods.toJSON = function () {
+    const user = this.toObject();
+    delete user.password;
+    delete user.verificationToken;
+    delete user.resetPasswordToken;
+    delete user.resetPasswordExpires;
     return user;
 };
 
