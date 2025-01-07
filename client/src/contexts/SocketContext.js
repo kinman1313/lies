@@ -9,6 +9,7 @@ export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
     const [socket, setSocket] = useState(null);
+    const [isConnected, setIsConnected] = useState(false);
     const { user } = useAuth();
 
     useEffect(() => {
@@ -18,34 +19,52 @@ export const SocketProvider = ({ children }) => {
                 auth: {
                     token: localStorage.getItem('token')
                 },
-                transports: ['websocket'],
-                withCredentials: true
+                transports: ['websocket', 'polling'],
+                withCredentials: true,
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
             });
 
             // Handle connection events
             newSocket.on('connect', () => {
                 console.log('Socket connected');
+                setIsConnected(true);
+                // Join with user info
+                newSocket.emit('join', user.username);
             });
 
             newSocket.on('connect_error', (error) => {
                 console.error('Socket connection error:', error);
+                setIsConnected(false);
             });
 
             newSocket.on('disconnect', (reason) => {
                 console.log('Socket disconnected:', reason);
+                setIsConnected(false);
+            });
+
+            // Attempt to reconnect on errors
+            newSocket.on('error', (error) => {
+                console.error('Socket error:', error);
+                if (!newSocket.connected) {
+                    newSocket.connect();
+                }
             });
 
             setSocket(newSocket);
 
             // Cleanup on unmount
             return () => {
-                newSocket.close();
+                if (newSocket) {
+                    newSocket.close();
+                }
             };
         }
     }, [user]);
 
     return (
-        <SocketContext.Provider value={{ socket }}>
+        <SocketContext.Provider value={{ socket, isConnected }}>
             {children}
         </SocketContext.Provider>
     );

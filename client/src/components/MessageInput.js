@@ -23,6 +23,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import GifPicker from './GifPicker';
+import { config } from '../config';
 
 const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
     const { user } = useAuth();
@@ -52,9 +53,10 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
                     const formData = new FormData();
                     formData.append('file', selectedFile);
 
-                    const response = await fetch('/api/upload', {
+                    const response = await fetch(`${config.API_URL}/api/upload`, {
                         method: 'POST',
-                        body: formData
+                        body: formData,
+                        credentials: 'include'
                     });
 
                     if (!response.ok) throw new Error('Upload failed');
@@ -73,11 +75,7 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
 
                     setSelectedFile(null);
                 } else {
-                    console.log('Sending text message:', message.trim()); // Debug log
-                    onSendMessage({
-                        type: 'text',
-                        content: message.trim()
-                    });
+                    onSendMessage(message.trim());
                 }
 
                 setMessage('');

@@ -3,8 +3,42 @@ const http = require('http');
 const socketIO = require('socket.io');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const multer = require('multer');
+const path = require('path');
 const { handleUpdateAvatar } = require('./socket/userHandlers');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+// Get upload path from environment or default to local uploads directory
+const UPLOAD_PATH = process.env.UPLOAD_PATH || path.join(__dirname, 'uploads');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        // Ensure upload directory exists
+        if (!fs.existsSync(UPLOAD_PATH)) {
+            fs.mkdirSync(UPLOAD_PATH, { recursive: true });
+        }
+        cb(null, UPLOAD_PATH);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB limit
+    }
+});
+
+// Ensure uploads directory exists
+const fs = require('fs');
+if (!fs.existsSync('uploads')) {
+    fs.mkdirSync('uploads');
+}
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
@@ -49,6 +83,25 @@ const io = socketIO(server, {
         methods: ["GET", "POST", "PUT", "PATCH"],
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000
+});
+
+// Middleware to authenticate socket connections
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error('Authentication token missing'));
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.user = decoded;
+        next();
+    } catch (err) {
+        next(new Error('Authentication failed'));
     }
 });
 
@@ -63,52 +116,73 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
 });
 
-// Store connected users
+// Store connected users with their socket IDs
 const users = new Map();
 
 io.on('connection', (socket) => {
-    console.log('New client connected');
+    console.log('New client connected:', socket.id);
 
     socket.on('join', (username) => {
-        socket.username = username; // Store username in socket for later use
+        console.log('User joined:', username);
+        socket.username = username;
         users.set(socket.id, username);
         io.emit('userJoined', { username, users: Array.from(users.values()) });
     });
 
     socket.on('message', (message) => {
+        console.log('Message received:', message);
         const username = users.get(socket.id);
-        const messageData = {
-            text: message,
-            username,
-            timestamp: new Date().toISOString(),
-            reactions: []
-        };
+        if (!username) {
+            console.error('No username found for socket:', socket.id);
+            return;
+        }
+
+        let messageData;
+
+        // Handle different message types
+        if (typeof message === 'string') {
+            // Simple text message
+            messageData = {
+                type: 'text',
+                content: message,
+                username,
+                timestamp: new Date().toISOString(),
+                reactions: []
+            };
+        } else {
+            // Complex message object (file, voice, gif, etc.)
+            messageData = {
+                ...message,
+                username,
+                timestamp: new Date().toISOString(),
+                reactions: []
+            };
+        }
+
+        console.log('Emitting message data:', messageData);
         io.emit('message', messageData);
     });
 
     socket.on('typing', ({ username }) => {
-        io.emit('typing', { username });
+        socket.broadcast.emit('typing', { username });
     });
 
     socket.on('stopTyping', ({ username }) => {
-        io.emit('stopTyping', { username });
+        socket.broadcast.emit('stopTyping', { username });
     });
-
-    socket.on('reaction', ({ messageId, emoji, username }) => {
-        io.emit('reaction', { messageId, emoji, username });
-    });
-
-    socket.on('removeReaction', ({ messageId, emoji, username }) => {
-        io.emit('removeReaction', { messageId, emoji, username });
-    });
-
-    socket.on('updateAvatar', (data) => handleUpdateAvatar(io, socket, data));
 
     socket.on('disconnect', () => {
         const username = users.get(socket.id);
-        users.delete(socket.id);
-        io.emit('userLeft', { username, users: Array.from(users.values()) });
-        console.log('Client disconnected');
+        if (username) {
+            console.log('Client disconnected:', username);
+            users.delete(socket.id);
+            io.emit('userLeft', { username, users: Array.from(users.values()) });
+        }
+    });
+
+    // Handle errors
+    socket.on('error', (error) => {
+        console.error('Socket error:', error);
     });
 });
 
@@ -117,6 +191,42 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).send('Something broke!');
 });
+
+// File upload endpoint
+app.post('/api/upload', upload.single('file'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Generate the correct URL for the uploaded file
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${path.basename(req.file.path)}`;
+
+        console.log('File uploaded successfully:', {
+            path: req.file.path,
+            url: fileUrl
+        });
+
+        res.json({
+            fileUrl,
+            fileName: req.file.originalname,
+            fileSize: req.file.size,
+            fileType: req.file.mimetype
+        });
+    } catch (error) {
+        console.error('File upload error:', error);
+        res.status(500).json({ error: 'File upload failed' });
+    }
+});
+
+// Serve uploaded files with caching headers
+app.use('/uploads', express.static(UPLOAD_PATH, {
+    maxAge: '1d',
+    setHeaders: function (res, path) {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+}));
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
