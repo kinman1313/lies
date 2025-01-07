@@ -6,6 +6,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const path = require('path');
 const http = require('http');
+const fileUpload = require('express-fileupload');
+const { v4: uuidv4 } = require('uuid');
 
 // Import middleware
 const { errorHandler, notFound, rateLimitHandler } = require('./middleware/error');
@@ -16,9 +18,6 @@ const logger = require('./utils/logger');
 const messageRoutes = require('./routes/messages');
 const channelRoutes = require('./routes/channels');
 const userRoutes = require('./routes/users');
-
-// Import socket service
-const SocketService = require('./services/socketService');
 
 // Create Express app
 const app = express();
@@ -37,9 +36,6 @@ mongoose.connect(process.env.MONGODB_URI, {
         process.exit(1);
     });
 
-// Initialize socket service
-const socketService = new SocketService(server);
-
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -50,6 +46,40 @@ app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(logger.requestMiddleware);
+
+// File upload middleware
+app.use(fileUpload({
+    createParentPath: true,
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+    debug: process.env.NODE_ENV === 'development'
+}));
+
+// File upload endpoint
+app.post('/api/upload', async (req, res) => {
+    try {
+        if (!req.files || !req.files.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const file = req.files.file;
+        const fileName = `${uuidv4()}-${file.name}`;
+        const uploadPath = path.join(__dirname, 'uploads', fileName);
+
+        await file.mv(uploadPath);
+
+        res.json({
+            fileUrl: `/uploads/${fileName}`,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.mimetype
+        });
+    } catch (error) {
+        logger.error('File upload error:', error);
+        res.status(500).json({ error: 'File upload failed' });
+    }
+});
 
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -72,6 +102,49 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Socket.IO setup
+const io = require('socket.io')(server, {
+    cors: {
+        origin: process.env.CLIENT_URL || 'http://localhost:3000',
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
+});
+
+// Socket authentication middleware
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error('Authentication error'));
+    }
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.user = decoded;
+        next();
+    } catch (err) {
+        next(new Error('Authentication error'));
+    }
+});
+
+// Socket event handlers
+const messageHandlers = require('./socket/messageHandlers');
+const userHandlers = require('./socket/userHandlers');
+
+io.on('connection', (socket) => {
+    logger.info(`User connected: ${socket.user?.username}`);
+
+    // Message events
+    socket.on('message', (data) => messageHandlers.handleMessage(io, socket, data));
+    socket.on('reaction', (data) => messageHandlers.handleReaction(io, socket, data));
+    socket.on('scheduleMessage', (data) => messageHandlers.handleScheduledMessage(io, socket, data));
+
+    // User events
+    socket.on('join', (data) => userHandlers.handleJoin(io, socket, data));
+    socket.on('typing', (data) => userHandlers.handleTyping(io, socket, data, true));
+    socket.on('stopTyping', (data) => userHandlers.handleTyping(io, socket, data, false));
+    socket.on('disconnect', () => userHandlers.handleDisconnect(io, socket));
+});
+
 // Error handling
 app.use(notFound);
 app.use(errorHandler);
@@ -80,19 +153,14 @@ app.use(rateLimitHandler);
 // Graceful shutdown
 const gracefulShutdown = () => {
     logger.info('Received shutdown signal');
-
-    // Close server
     server.close(() => {
         logger.info('Server closed');
-
-        // Close database connection
         mongoose.connection.close(false, () => {
             logger.info('MongoDB connection closed');
             process.exit(0);
         });
     });
 
-    // Force close after 10s
     setTimeout(() => {
         logger.error('Could not close connections in time, forcefully shutting down');
         process.exit(1);
