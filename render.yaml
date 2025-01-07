@@ -39,6 +39,7 @@ services:
   - type: web
     name: lies-client
     env: static
+    plan: starter-plus
     buildCommand: cd client && rm -rf node_modules && npm install && npm run build
     staticPublishPath: ./client/build
     routes:
