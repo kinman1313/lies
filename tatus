@@ -1,0 +1,20 @@
+6ef7c2e 2025-01-07 Restore original render.yaml configuration
+2a59e57 2025-01-07 Fix render.yaml: Change service type to web for both frontend and backend
+dbf28bd 2025-01-07 login updates
+b2714a0 2025-01-07 Fix API endpoints: Change from /api/auth/* to /api/users/* to match server routes
+4a48fc8 2025-01-07 Fix password reset functionality: - Add NewPassword component - Update ResetPassword component - Fix password reset endpoints - Update client routes
+d5c13ed 2025-01-07 Fix authentication and password reset: - Update User model with password reset functionality - Add password reset endpoints - Improve authentication middleware - Clean up user routes
+e388114 2025-01-07 Update server configuration: - Add file upload handling - Fix socket.io setup - Add proper event handlers - Update dependencies
+8344416 2025-01-07 feat: update MessageBubble component with improved styling and functionality
+2207e40 2025-01-07 fix: update message handling and layout issues
+0c281b2 2025-01-07 fix: socket handling improvements - Remove incorrect socket initialization in MessageInput - Remove unused socket.io-client import in UserProfile - Use socket from context consistently
+3944217 2025-01-07 fix: resolve ESLint errors - Add useTheme hook in MessageInput - Add useSocket hook in UserProfile - Add handleError function in MessageContext
+fed8c50 2025-01-07 fix: change client service type to static
+5a619d2 2025-01-07 fix: remove plan field from static site as it's not needed
+d8dfa4b 2025-01-07 fix: add free plan for client service in render.yaml
+4fdc549 2025-01-07 fix: remove plan field from static site config as it's not needed
+7e6863b 2025-01-07 fix: update service plan to free in render.yaml
+c4748d2 2025-01-07 fix: remove deprecated MongoDB connection options
+695b265 2025-01-07 fix: correct CssBaseline import path
+c31df82 2025-01-07 feat: add comprehensive server implementation with models, routes, and services
+d192d71 2025-01-07 feat: add comprehensive server dependencies
