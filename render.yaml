@@ -3,7 +3,7 @@ services:
     name: lies-server
     env: node
     region: ohio
-    plan: starter
+    plan: standard
     buildCommand: cd server && npm install
     startCommand: cd server && node server.js
     disk:
