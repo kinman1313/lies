@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
                 axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
                 // Verify token with server
-                const response = await axios.get(`${config.API_URL}/api/users/verify`);
+                const response = await axios.get(`${config.API_URL}/api/auth/verify`);
                 if (response.data.user) {
                     setUser(response.data.user);
                 } else {
@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }) => {
                 // Clear invalid token
                 localStorage.removeItem('token');
                 delete axios.defaults.headers.common['Authorization'];
-                setError(err.message);
+                setError(err.response?.data?.error || err.message);
             } finally {
                 setLoading(false);
             }
@@ -55,7 +55,8 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            const response = await axios.post(`${config.API_URL}/api/users/login`, {
+            setError(null);
+            const response = await axios.post(`${config.API_URL}/api/auth/login`, {
                 email,
                 password
             });
@@ -67,62 +68,68 @@ export const AuthProvider = ({ children }) => {
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
             setUser(userData);
-            setError(null);
             return userData;
         } catch (err) {
-            const message = err.response?.data?.error || 'Login failed';
+            console.error('Login error:', err);
+            const message = err.response?.data?.error || err.message || 'Login failed';
             setError(message);
-            throw err;
+            throw new Error(message);
+        }
+    };
+
+    const register = async (username, email, password) => {
+        try {
+            setError(null);
+            const response = await axios.post(`${config.API_URL}/api/auth/register`, {
+                username,
+                email,
+                password
+            }, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const { token, user: userData } = response.data;
+
+            // Save token and set default header
+            localStorage.setItem('token', token);
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+            setUser(userData);
+            return userData;
+        } catch (err) {
+            console.error('Registration error:', err);
+            const message = err.response?.data?.error || err.message || 'Registration failed';
+            setError(message);
+            throw new Error(message);
         }
     };
 
     const logout = async () => {
         try {
-            await axios.post(`${config.API_URL}/api/users/logout`);
+            setError(null);
+            await axios.post(`${config.API_URL}/api/auth/logout`);
         } catch (err) {
             console.error('Logout error:', err);
         } finally {
             localStorage.removeItem('token');
             delete axios.defaults.headers.common['Authorization'];
             setUser(null);
-            setError(null);
-        }
-    };
-
-    const register = async (username, email, password) => {
-        try {
-            const response = await axios.post(`${config.API_URL}/api/users/register`, {
-                username,
-                email,
-                password
-            });
-
-            const { token, user: userData } = response.data;
-
-            // Save token and set default header
-            localStorage.setItem('token', token);
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-            setUser(userData);
-            setError(null);
-            return userData;
-        } catch (err) {
-            const message = err.response?.data?.error || 'Registration failed';
-            setError(message);
-            throw err;
         }
     };
 
     const updateProfile = async (userData) => {
         try {
+            setError(null);
             const response = await axios.put(`${config.API_URL}/api/users/profile`, userData);
             setUser(response.data.user);
-            setError(null);
             return response.data.user;
         } catch (err) {
-            const message = err.response?.data?.error || 'Profile update failed';
+            console.error('Profile update error:', err);
+            const message = err.response?.data?.error || err.message || 'Profile update failed';
             setError(message);
-            throw err;
+            throw new Error(message);
         }
     };
 
