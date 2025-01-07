@@ -7,7 +7,11 @@ const multer = require('multer');
 const path = require('path');
 const { handleUpdateAvatar } = require('./socket/userHandlers');
 const jwt = require('jsonwebtoken');
+const messageScheduler = require('./services/messageScheduler');
 require('dotenv').config();
+
+// Start the message scheduler
+messageScheduler.start();
 
 // Get upload path from environment or default to local uploads directory
 const UPLOAD_PATH = process.env.UPLOAD_PATH || path.join(__dirname, 'uploads');
@@ -161,6 +165,50 @@ io.on('connection', (socket) => {
 
         console.log('Emitting message data:', messageData);
         io.emit('message', messageData);
+    });
+
+    // Handle scheduled messages
+    socket.on('scheduleMessage', async (message) => {
+        const username = users.get(socket.id);
+        if (!username) {
+            console.error('No username found for socket:', socket.id);
+            return;
+        }
+
+        try {
+            const scheduledMessage = await messageScheduler.scheduleMessage({
+                ...message,
+                username,
+                userId: socket.user._id
+            }, new Date(message.metadata.scheduledFor));
+
+            socket.emit('messageScheduled', {
+                success: true,
+                message: 'Message scheduled successfully',
+                scheduledMessage
+            });
+        } catch (error) {
+            console.error('Error scheduling message:', error);
+            socket.emit('messageScheduled', {
+                success: false,
+                error: 'Failed to schedule message'
+            });
+        }
+    });
+
+    // Handle message disappearing settings
+    socket.on('setMessageExpiry', async (data) => {
+        const { messageId, expiryTime } = data;
+        try {
+            const message = await Message.findById(messageId);
+            if (message) {
+                message.expiresAt = new Date(Date.now() + expiryTime);
+                await message.save();
+                io.emit('messageUpdated', message);
+            }
+        } catch (error) {
+            console.error('Error setting message expiry:', error);
+        }
     });
 
     socket.on('typing', ({ username }) => {

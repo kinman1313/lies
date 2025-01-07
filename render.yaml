@@ -3,13 +3,13 @@ services:
     name: lies-server
     env: node
     region: ohio
-    plan: free
+    plan: starter
     buildCommand: cd server && npm install
     startCommand: cd server && node server.js
     disk:
       name: lies-server-disk
       mountPath: /opt/render/project/src/server/uploads
-      sizeGB: 1
+      sizeGB: 10
     envVars:
       - key: MONGODB_URI
         sync: false
@@ -39,6 +39,7 @@ services:
   - type: web
     name: lies-client
     env: static
+    plan: starter
     buildCommand: cd client && rm -rf node_modules && npm install && npm run build
     staticPublishPath: ./client/build
     routes:

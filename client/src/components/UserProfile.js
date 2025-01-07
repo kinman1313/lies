@@ -30,6 +30,8 @@ import {
     Notifications as NotificationsIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { config } from '../config';
+import io from 'socket.io-client';
 
 const NOTIFICATION_SOUNDS = {
     default: '/sounds/notification-default.mp3',
@@ -90,14 +92,29 @@ const UserProfile = ({ open, onClose }) => {
         }
     };
 
-    const handleAvatarChange = (event) => {
+    const handleAvatarChange = async (event) => {
         const file = event.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setNewAvatar(reader.result);
-            };
-            reader.readAsDataURL(file);
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch(`${config.API_URL}/api/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('Upload failed');
+
+                const { fileUrl } = await response.json();
+                setNewAvatar(fileUrl);
+
+                // Update avatar immediately in socket context
+                socket.emit('updateAvatar', { avatarUrl: fileUrl });
+            } catch (error) {
+                console.error('Error uploading avatar:', error);
+            }
         }
     };
 
