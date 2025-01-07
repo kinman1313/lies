@@ -32,6 +32,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { config } from '../config';
 import io from 'socket.io-client';
+import { useSocket } from '../contexts/SocketContext';
 
 const NOTIFICATION_SOUNDS = {
     default: '/sounds/notification-default.mp3',
@@ -42,6 +43,7 @@ const NOTIFICATION_SOUNDS = {
 
 const UserProfile = ({ open, onClose }) => {
     const { user, updateProfile } = useAuth();
+    const { socket } = useSocket();
     const [username, setUsername] = useState(user?.username || '');
     const [avatar, setAvatar] = useState(user?.avatar || '');
     const [newAvatar, setNewAvatar] = useState(null);

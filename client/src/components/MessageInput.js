@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     Box,
     TextField,
@@ -25,6 +25,7 @@ import { useAuth } from '../contexts/AuthContext';
 import GifPicker from './GifPicker';
 import { config } from '../config';
 import io from 'socket.io-client';
+import { useTheme } from '@mui/material/styles';
 
 const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
     const { user } = useAuth();
@@ -41,6 +42,7 @@ const MessageInput = ({ onSendMessage, onTyping, typingUsers }) => {
     const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
     const [scheduledTime, setScheduledTime] = useState(null);
     const socket = io();
+    const theme = useTheme();
 
     const handleMessageChange = (e) => {
         setMessage(e.target.value);

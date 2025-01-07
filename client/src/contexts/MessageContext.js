@@ -5,7 +5,13 @@ import { debounce } from 'lodash';
 
 const MessageContext = createContext(null);
 
-export const useMessages = () => useContext(MessageContext);
+export const useMessages = () => {
+    const context = useContext(MessageContext);
+    if (!context) {
+        throw new Error('useMessages must be used within a MessageProvider');
+    }
+    return context;
+};
 
 export const MessageProvider = ({ children }) => {
     const { socket } = useSocket();
@@ -16,6 +22,12 @@ export const MessageProvider = ({ children }) => {
     const [scheduledMessages, setScheduledMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    const handleError = useCallback((error) => {
+        console.error('Message operation failed:', error);
+        setError(error.message || 'An error occurred');
+        setLoading(false);
+    }, []);
 
     // Debounced typing indicator
     const debouncedEmitTyping = useCallback(
@@ -29,13 +41,6 @@ export const MessageProvider = ({ children }) => {
 
     useEffect(() => {
         if (!socket) return;
-
-        const handleError = (error) => {
-            console.error('Message operation failed:', error);
-            setError(error.message || 'Operation failed');
-            // Clear error after 5 seconds
-            setTimeout(() => setError(null), 5000);
-        };
 
         // Message handlers with error handling
         socket.on('message', (message) => {
