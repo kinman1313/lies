@@ -1,115 +1,109 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Box,
-    Paper,
     Typography,
-    List,
-    ListItem,
-    ListItemAvatar,
-    ListItemText,
-    ListItemIcon,
-    Avatar,
-    IconButton,
-    Button,
-    Menu,
-    MenuItem,
     Divider,
-    Badge,
-    Tooltip,
-    SpeedDial,
-    SpeedDialIcon,
-    SpeedDialAction,
-    Snackbar,
+    CircularProgress,
     Alert
 } from '@mui/material';
-import {
-    Add as AddIcon,
-    Group as GroupIcon,
-    PersonAdd as InviteIcon,
-    Settings as SettingsIcon,
-    Chat as ChatIcon,
-    MoreVert as MoreIcon
-} from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
-import { motion } from 'framer-motion';
-import MessageInput from './MessageInput';
+import { useAuth } from '../contexts/AuthContext';
 import MessageList from './MessageList';
+import MessageInput from './MessageInput';
+import { useMessages } from '../contexts/MessageContext';
 
-const ChatLobby = ({ onCreateRoom }) => {
+const ChatLobby = () => {
+    const { socket, isConnected } = useSocket();
     const { user } = useAuth();
-    const { socket } = useSocket();
-    const [messages, setMessages] = useState([]);
-    const [error, setError] = useState('');
-    const [usersOnline, setUsersOnline] = useState([]);
+    const { messages, loading, error, sendMessage } = useMessages();
+    const messagesEndRef = useRef(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
 
     useEffect(() => {
-        if (socket) {
-            socket.emit('joinLobby');
+        scrollToBottom();
+    }, [messages]);
 
-            socket.on('lobbyMessage', (message) => {
-                console.log('Received lobby message:', message); // Debug log
-                setMessages(prev => [...prev, message]);
-            });
-
-            socket.on('usersOnline', (users) => {
-                setUsersOnline(users);
-            });
-
-            return () => {
-                socket.emit('leaveLobby');
-                socket.off('lobbyMessage');
-                socket.off('usersOnline');
-            };
-        }
-    }, [socket]);
-
-    const handleSendMessage = (messageData) => {
-        if (socket) {
-            // Create a temporary message
-            const tempMessage = {
-                _id: `temp-${Date.now()}`,
-                type: messageData.type,
-                content: messageData.content,
-                metadata: messageData.metadata,
-                userId: user._id,
-                username: user.username,
-                createdAt: new Date().toISOString(),
-                pending: true
-            };
-
-            // Add message to local state immediately
-            setMessages(prev => [...prev, tempMessage]);
-
-            // Emit to server
-            console.log('Sending lobby message:', messageData); // Debug log
-            socket.emit('lobbyMessage', messageData);
+    const handleSendMessage = async (messageData) => {
+        try {
+            await sendMessage(messageData);
+        } catch (err) {
+            console.error('Failed to send message:', err);
         }
     };
 
-    return (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Messages Area */}
-            <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 1 }}>
-                <MessageList messages={messages} />
+    if (!isConnected) {
+        return (
+            <Box sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                gap: 2
+            }}>
+                <CircularProgress />
+                <Typography>Connecting to chat...</Typography>
             </Box>
+        );
+    }
+
+    return (
+        <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            bgcolor: 'background.default'
+        }}>
+            {/* Messages Area */}
+            <Box sx={{
+                flex: 1,
+                overflow: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                p: 3
+            }}>
+                {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                        <CircularProgress />
+                    </Box>
+                ) : error ? (
+                    <Alert severity="error" sx={{ mx: 2 }}>
+                        {error}
+                    </Alert>
+                ) : messages.length === 0 ? (
+                    <Box sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100%',
+                        gap: 2,
+                        color: 'text.secondary'
+                    }}>
+                        <Typography variant="h6">Welcome to the Chat!</Typography>
+                        <Typography>Start a conversation by sending a message.</Typography>
+                    </Box>
+                ) : (
+                    <MessageList messages={messages} />
+                )}
+                <div ref={messagesEndRef} />
+            </Box>
+
+            <Divider />
 
             {/* Message Input */}
-            <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+            <Box sx={{
+                p: 2,
+                bgcolor: 'background.paper',
+                borderTop: 1,
+                borderColor: 'divider'
+            }}>
                 <MessageInput onSendMessage={handleSendMessage} />
             </Box>
-
-            {/* Error Snackbar */}
-            <Snackbar
-                open={Boolean(error)}
-                autoHideDuration={6000}
-                onClose={() => setError('')}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-            >
-                <Alert onClose={() => setError('')} severity="error">
-                    {error}
-                </Alert>
-            </Snackbar>
         </Box>
     );
 };

@@ -68,7 +68,8 @@ const Chat = () => {
             display: 'flex',
             height: '100vh',
             width: '100vw',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            bgcolor: 'background.default'
         }}>
             {/* Sidebar */}
             <Drawer
@@ -87,6 +88,7 @@ const Chat = () => {
                     }
                 }}
             >
+                {/* User Profile Section */}
                 <Box sx={{
                     p: 2,
                     display: 'flex',
@@ -111,8 +113,10 @@ const Chat = () => {
                             }
                         }}
                     />
-                    <Box>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{user?.username}</Typography>
+                    <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'white' }}>
+                            {user?.username}
+                        </Typography>
                         <Typography
                             variant="caption"
                             sx={{
@@ -135,171 +139,74 @@ const Chat = () => {
                             Online
                         </Typography>
                     </Box>
+                    <IconButton onClick={handleLogout} sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                        <LogoutIcon />
+                    </IconButton>
                 </Box>
 
-                {/* Main chat area */}
+                {/* Online Users List */}
+                <List sx={{ flex: 1, overflow: 'auto' }}>
+                    {usersOnline.map((onlineUser) => (
+                        <ListItem key={onlineUser.id}>
+                            <ListItemIcon>
+                                <Avatar src={onlineUser.avatar} alt={onlineUser.username} />
+                            </ListItemIcon>
+                            <ListItemText
+                                primary={onlineUser.username}
+                                sx={{ color: 'white' }}
+                            />
+                        </ListItem>
+                    ))}
+                </List>
+            </Drawer>
+
+            {/* Main Chat Area */}
+            <Box sx={{
+                flex: 1,
+                height: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                ml: isMobile ? 0 : `${DRAWER_WIDTH}px`,
+                bgcolor: 'background.default'
+            }}>
+                {/* Chat Header */}
+                <AppBar position="static" sx={{ bgcolor: 'background.paper', boxShadow: 1 }}>
+                    <Toolbar>
+                        {isMobile && (
+                            <IconButton
+                                edge="start"
+                                onClick={() => setDrawerOpen(true)}
+                                sx={{ mr: 2 }}
+                            >
+                                <MenuIcon />
+                            </IconButton>
+                        )}
+                        <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                            {activeRoom ? `Room: ${activeRoom}` : 'Chat Lobby'}
+                        </Typography>
+                    </Toolbar>
+                </AppBar>
+
+                {/* Chat Content */}
                 <Box sx={{
                     flex: 1,
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
-                    background: 'rgba(19, 47, 76, 0.4)',
-                    backdropFilter: 'blur(20px)'
+                    bgcolor: 'background.default'
                 }}>
-                    {/* Header */}
-                    <Box sx={{
-                        p: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                        background: 'rgba(19, 47, 76, 0.95)',
-                        backdropFilter: 'blur(20px)',
-                        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
-                        zIndex: 2
-                    }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {isMobile && (
-                                <IconButton
-                                    edge="start"
-                                    onClick={() => setDrawerOpen(true)}
-                                    sx={{
-                                        color: theme.palette.primary.main,
-                                        '&:hover': {
-                                            background: 'rgba(124, 77, 255, 0.08)'
-                                        }
-                                    }}
-                                >
-                                    <MenuIcon />
-                                </IconButton>
-                            )}
-                            <Typography variant="h6" sx={{
-                                fontWeight: 600,
-                                background: theme.palette.primary.gradient,
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent'
-                            }}>
-                                {activeRoom ? 'Chat Room' : 'General Lobby'}
-                            </Typography>
-                            {!activeRoom && (
-                                <Typography
-                                    variant="caption"
-                                    sx={{
-                                        color: 'rgba(255, 255, 255, 0.7)',
-                                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                        padding: '4px 8px',
-                                        borderRadius: '12px',
-                                        fontSize: '0.75rem'
-                                    }}
-                                >
-                                    {usersOnline.length} users online
-                                </Typography>
-                            )}
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <IconButton
-                                onClick={() => setProfileOpen(true)}
-                                sx={{
-                                    color: theme.palette.primary.main,
-                                    '&:hover': {
-                                        background: 'rgba(124, 77, 255, 0.08)'
-                                    }
-                                }}
-                            >
-                                <SettingsIcon />
-                            </IconButton>
-                            <IconButton
-                                onClick={handleLogout}
-                                sx={{
-                                    color: '#ef5350',
-                                    '&:hover': {
-                                        background: 'rgba(239, 83, 80, 0.08)'
-                                    }
-                                }}
-                            >
-                                <LogoutIcon />
-                            </IconButton>
-                        </Box>
-                    </Box>
-
-                    {/* Chat content */}
-                    <Box sx={{
-                        flex: 1,
-                        overflow: 'hidden',
-                        position: 'relative',
-                        '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            pointerEvents: 'none',
-                            background: 'linear-gradient(180deg, rgba(19, 47, 76, 0.2) 0%, transparent 100%)'
-                        }
-                    }}>
-                        {activeRoom ? (
-                            <ChatRoom
-                                roomId={activeRoom}
-                                onLeaveRoom={() => setActiveRoom(null)}
-                                onClose={() => setActiveRoom(null)}
-                            />
-                        ) : (
-                            <ChatLobby
-                                onCreateRoom={(roomId) => setActiveRoom(roomId)}
-                            />
-                        )}
-                    </Box>
+                    {activeRoom ? (
+                        <ChatRoom
+                            roomId={activeRoom}
+                            onLeaveRoom={() => setActiveRoom(null)}
+                            onClose={() => setActiveRoom(null)}
+                        />
+                    ) : (
+                        <ChatLobby
+                            onCreateRoom={(roomId) => setActiveRoom(roomId)}
+                        />
+                    )}
                 </Box>
-
-                {/* Profile Dialog */}
-                <UserProfile
-                    open={profileOpen}
-                    onClose={() => setProfileOpen(false)}
-                />
-
-                {/* Error Snackbar */}
-                <Snackbar
-                    open={!!error}
-                    autoHideDuration={6000}
-                    onClose={() => setError('')}
-                >
-                    <Alert
-                        onClose={() => setError('')}
-                        severity="error"
-                        sx={{
-                            backgroundColor: 'rgba(211, 47, 47, 0.95)',
-                            backdropFilter: 'blur(20px)',
-                            '.MuiAlert-icon': {
-                                color: '#fff'
-                            }
-                        }}
-                    >
-                        {error}
-                    </Alert>
-                </Snackbar>
-            </Drawer>
-
-            {/* Main content */}
-            <Box sx={{
-                flexGrow: 1,
-                height: '100vh',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                ml: isMobile ? 0 : `${DRAWER_WIDTH}px`
-            }}>
-                {activeRoom ? (
-                    <ChatRoom
-                        roomId={activeRoom}
-                        onLeaveRoom={() => setActiveRoom(null)}
-                        onClose={() => setActiveRoom(null)}
-                    />
-                ) : (
-                    <ChatLobby
-                        onCreateRoom={(roomId) => setActiveRoom(roomId)}
-                    />
-                )}
             </Box>
 
             {/* Profile Dialog */}
@@ -307,6 +214,28 @@ const Chat = () => {
                 open={profileOpen}
                 onClose={() => setProfileOpen(false)}
             />
+
+            {/* Error Snackbar */}
+            <Snackbar
+                open={!!error}
+                autoHideDuration={6000}
+                onClose={() => setError('')}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+                <Alert
+                    onClose={() => setError('')}
+                    severity="error"
+                    sx={{
+                        backgroundColor: 'rgba(211, 47, 47, 0.95)',
+                        backdropFilter: 'blur(20px)',
+                        '.MuiAlert-icon': {
+                            color: '#fff'
+                        }
+                    }}
+                >
+                    {error}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };
