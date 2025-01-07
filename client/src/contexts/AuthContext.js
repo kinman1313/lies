@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
                 axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
                 // Verify token with server
-                const response = await axios.get(`${config.API_URL}/api/auth/verify`);
+                const response = await axios.get(`${config.API_URL}/api/users/verify`);
                 if (response.data.user) {
                     setUser(response.data.user);
                 } else {
@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            const response = await axios.post(`${config.API_URL}/api/auth/login`, {
+            const response = await axios.post(`${config.API_URL}/api/users/login`, {
                 email,
                 password
             });
@@ -70,15 +70,15 @@ export const AuthProvider = ({ children }) => {
             setError(null);
             return userData;
         } catch (err) {
-            const message = err.response?.data?.message || 'Login failed';
+            const message = err.response?.data?.error || 'Login failed';
             setError(message);
-            throw new Error(message);
+            throw err;
         }
     };
 
     const logout = async () => {
         try {
-            await axios.post(`${config.API_URL}/api/auth/logout`);
+            await axios.post(`${config.API_URL}/api/users/logout`);
         } catch (err) {
             console.error('Logout error:', err);
         } finally {
@@ -91,7 +91,7 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (username, email, password) => {
         try {
-            const response = await axios.post(`${config.API_URL}/api/auth/register`, {
+            const response = await axios.post(`${config.API_URL}/api/users/register`, {
                 username,
                 email,
                 password
@@ -107,9 +107,9 @@ export const AuthProvider = ({ children }) => {
             setError(null);
             return userData;
         } catch (err) {
-            const message = err.response?.data?.message || 'Registration failed';
+            const message = err.response?.data?.error || 'Registration failed';
             setError(message);
-            throw new Error(message);
+            throw err;
         }
     };
 
@@ -120,9 +120,9 @@ export const AuthProvider = ({ children }) => {
             setError(null);
             return response.data.user;
         } catch (err) {
-            const message = err.response?.data?.message || 'Profile update failed';
+            const message = err.response?.data?.error || 'Profile update failed';
             setError(message);
-            throw new Error(message);
+            throw err;
         }
     };
 
