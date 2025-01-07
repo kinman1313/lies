@@ -122,7 +122,7 @@ export const MessageProvider = ({ children }) => {
                 setMessages(prev => prev.map(msg => {
                     if (msg._id === messageId) {
                         const reactions = msg.reactions || [];
-                        const existingReaction = reactions.findIndex(r => 
+                        const existingReaction = reactions.findIndex(r =>
                             r.emoji === reaction && r.username === username
                         );
 
