@@ -11,7 +11,16 @@ import {
     Chip,
     Stack,
     Collapse,
-    LinearProgress
+    LinearProgress,
+    ListItemIcon,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Select,
+    FormControl,
+    InputLabel
 } from '@mui/material';
 import {
     MoreVert as MoreVertIcon,
@@ -24,12 +33,24 @@ import {
     EmojiEmotions as EmojiIcon,
     Reply as ReplyIcon,
     Edit as EditIcon,
-    Delete as DeleteIcon
+    Delete as DeleteIcon,
+    Timelapse as TimelapseIcon
 } from '@mui/icons-material';
 import EmojiPicker from './EmojiPicker';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDistanceToNow, formatDistance } from 'date-fns';
+import { useTheme } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
+
+const EXPIRY_OPTIONS = [
+    { value: 5 * 60 * 1000, label: '5 minutes' },
+    { value: 15 * 60 * 1000, label: '15 minutes' },
+    { value: 30 * 60 * 1000, label: '30 minutes' },
+    { value: 60 * 60 * 1000, label: '1 hour' },
+    { value: 24 * 60 * 60 * 1000, label: '24 hours' },
+    { value: 7 * 24 * 60 * 60 * 1000, label: '7 days' }
+];
 
 const MessageBubble = ({ message, isOwn }) => {
     const { socket } = useSocket();
@@ -42,6 +63,9 @@ const MessageBubble = ({ message, isOwn }) => {
     const [timeLeft, setTimeLeft] = useState(null);
     const audioRef = useRef(null);
     const progressInterval = useRef(null);
+    const theme = useTheme();
+    const [expiryDialogOpen, setExpiryDialogOpen] = useState(false);
+    const [selectedExpiry, setSelectedExpiry] = useState(EXPIRY_OPTIONS[0].value);
 
     useEffect(() => {
         if (message.expiresAt) {
@@ -122,6 +146,15 @@ const MessageBubble = ({ message, isOwn }) => {
         }
     };
 
+    const handleSetExpiry = () => {
+        socket.emit('setMessageExpiry', {
+            messageId: message._id,
+            expiryTime: selectedExpiry
+        });
+        setExpiryDialogOpen(false);
+        handleMenuClose();
+    };
+
     const renderContent = () => {
         switch (message.type) {
             case 'voice':
@@ -187,33 +220,74 @@ const MessageBubble = ({ message, isOwn }) => {
             <Paper
                 elevation={1}
                 sx={{
-                    p: 1,
-                    backgroundColor: isOwn ? 'primary.light' : 'background.paper',
-                    maxWidth: '70%'
+                    p: 2,
+                    backgroundColor: isOwn ? message.user?.preferences?.messageColor || theme.palette.primary.main : 'background.paper',
+                    backgroundImage: isOwn ? `linear-gradient(135deg, ${message.user?.preferences?.messageColor || theme.palette.primary.main} 0%, ${message.user?.preferences?.messageColor ? alpha(message.user?.preferences?.messageColor, 0.8) : theme.palette.primary.light} 100%)` : 'none',
+                    color: isOwn ? '#fff' : 'text.primary',
+                    maxWidth: '70%',
+                    borderRadius: '16px',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid',
+                    borderColor: isOwn ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+                    boxShadow: isOwn ? `0 4px 20px ${alpha(message.user?.preferences?.messageColor || theme.palette.primary.main, 0.3)}` : '0 4px 20px rgba(0, 0, 0, 0.1)'
                 }}
             >
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                     <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="caption" color="textSecondary">
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: isOwn ? 'rgba(255, 255, 255, 0.8)' : 'text.secondary',
+                                fontWeight: 500
+                            }}
+                        >
                             {message.username}
                         </Typography>
-                        {renderContent()}
+                        <Box sx={{ mt: 0.5 }}>
+                            {renderContent()}
+                        </Box>
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                display: 'block',
+                                mt: 1,
+                                color: isOwn ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'
+                            }}
+                        >
+                            {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
+                        </Typography>
                     </Box>
-                    <IconButton size="small" onClick={handleMenuOpen}>
+                    <IconButton
+                        size="small"
+                        onClick={handleMenuOpen}
+                        sx={{
+                            color: isOwn ? 'rgba(255, 255, 255, 0.8)' : 'text.secondary',
+                            '&:hover': {
+                                backgroundColor: isOwn ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }}
+                    >
                         <MoreVertIcon fontSize="small" />
                     </IconButton>
                 </Box>
 
                 {/* Message metadata */}
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                        mt: 1,
+                        color: isOwn ? 'rgba(255, 255, 255, 0.8)' : 'text.secondary'
+                    }}
+                >
                     {message.isPinned && (
                         <Tooltip title="Pinned">
-                            <PushPinIcon fontSize="small" color="primary" />
+                            <PushPinIcon fontSize="small" />
                         </Tooltip>
                     )}
                     {message.scheduledFor && (
                         <Tooltip title={`Scheduled for ${new Date(message.scheduledFor).toLocaleString()}`}>
-                            <ScheduleIcon fontSize="small" color="primary" />
+                            <ScheduleIcon fontSize="small" />
                         </Tooltip>
                     )}
                     {timeLeft && (
@@ -222,7 +296,11 @@ const MessageBubble = ({ message, isOwn }) => {
                                 icon={<TimerIcon fontSize="small" />}
                                 label={timeLeft}
                                 size="small"
-                                color="warning"
+                                variant="outlined"
+                                sx={{
+                                    borderColor: isOwn ? 'rgba(255, 255, 255, 0.2)' : 'inherit',
+                                    color: 'inherit'
+                                }}
                             />
                         </Tooltip>
                     )}
@@ -237,6 +315,13 @@ const MessageBubble = ({ message, isOwn }) => {
                                 label={`${reaction.emoji} ${reaction.count}`}
                                 size="small"
                                 onClick={() => handleReaction(reaction.emoji)}
+                                sx={{
+                                    borderColor: isOwn ? 'rgba(255, 255, 255, 0.2)' : 'inherit',
+                                    color: 'inherit',
+                                    '&:hover': {
+                                        backgroundColor: isOwn ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'
+                                    }
+                                }}
                             />
                         ))}
                     </Box>
@@ -248,28 +333,134 @@ const MessageBubble = ({ message, isOwn }) => {
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
                 onClose={handleMenuClose}
+                PaperProps={{
+                    sx: {
+                        backgroundColor: 'rgba(19, 47, 76, 0.95)',
+                        backdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)'
+                    }
+                }}
             >
                 <MenuItem onClick={() => setShowEmojiPicker(true)}>
-                    <EmojiIcon fontSize="small" sx={{ mr: 1 }} /> React
-                </MenuItem>
-                <MenuItem onClick={handleReply}>
-                    <ReplyIcon fontSize="small" sx={{ mr: 1 }} /> Reply
+                    <ListItemIcon>
+                        <EmojiIcon fontSize="small" />
+                    </ListItemIcon>
+                    Add Reaction
                 </MenuItem>
                 <MenuItem onClick={handlePin}>
-                    <PushPinIcon fontSize="small" sx={{ mr: 1 }} />
+                    <ListItemIcon>
+                        <PushPinIcon fontSize="small" />
+                    </ListItemIcon>
                     {message.isPinned ? 'Unpin' : 'Pin'}
+                </MenuItem>
+                <MenuItem onClick={handleReply}>
+                    <ListItemIcon>
+                        <ReplyIcon fontSize="small" />
+                    </ListItemIcon>
+                    Reply
                 </MenuItem>
                 {isOwn && (
                     <>
                         <MenuItem onClick={handleEdit}>
-                            <EditIcon fontSize="small" sx={{ mr: 1 }} /> Edit
+                            <ListItemIcon>
+                                <EditIcon fontSize="small" />
+                            </ListItemIcon>
+                            Edit
+                        </MenuItem>
+                        <MenuItem onClick={() => setExpiryDialogOpen(true)}>
+                            <ListItemIcon>
+                                <TimelapseIcon fontSize="small" />
+                            </ListItemIcon>
+                            Set Expiry Time
                         </MenuItem>
                         <MenuItem onClick={handleDelete}>
-                            <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
+                            <ListItemIcon>
+                                <DeleteIcon fontSize="small" />
+                            </ListItemIcon>
+                            Delete
                         </MenuItem>
                     </>
                 )}
             </Menu>
+
+            {/* Expiry Dialog */}
+            <Dialog
+                open={expiryDialogOpen}
+                onClose={() => setExpiryDialogOpen(false)}
+                PaperProps={{
+                    sx: {
+                        backgroundColor: 'rgba(19, 47, 76, 0.95)',
+                        backdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '16px',
+                        boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)'
+                    }
+                }}
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TimelapseIcon />
+                        Set Message Expiry Time
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+                        Choose when this message should disappear:
+                    </Typography>
+                    <FormControl fullWidth>
+                        <InputLabel>Expiry Time</InputLabel>
+                        <Select
+                            value={selectedExpiry}
+                            onChange={(e) => setSelectedExpiry(e.target.value)}
+                            label="Expiry Time"
+                            sx={{
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: 'rgba(255, 255, 255, 0.2)'
+                                },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: theme.palette.primary.main
+                                }
+                            }}
+                        >
+                            {EXPIRY_OPTIONS.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => setExpiryDialogOpen(false)}
+                        sx={{
+                            color: 'text.secondary',
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)'
+                            }
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleSetExpiry}
+                        variant="contained"
+                        sx={{
+                            background: theme.palette.primary.gradient,
+                            '&:hover': {
+                                background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.secondary.light} 100%)`,
+                            }
+                        }}
+                    >
+                        Set Expiry
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Emoji picker */}
             <Collapse in={showEmojiPicker}>
