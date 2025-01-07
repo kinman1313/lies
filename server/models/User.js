@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema({
         required: true,
         minlength: 6
     },
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
     avatar: {
         type: String,
         default: '/default-avatar.png'
@@ -49,125 +51,59 @@ const userSchema = new mongoose.Schema({
                 type: Boolean,
                 default: true
             },
-            desktop: {
-                type: Boolean,
-                default: true
-            },
             email: {
                 type: Boolean,
                 default: true
             }
-        },
-        messagePreferences: {
-            fontSize: {
-                type: Number,
-                default: 14
-            },
-            bubbleColor: {
-                type: String,
-                default: '#007AFF'
-            },
-            showTimestamps: {
-                type: Boolean,
-                default: true
-            }
         }
-    },
-    lastSeen: {
-        type: Date
-    },
-    isVerified: {
-        type: Boolean,
-        default: false
-    },
-    verificationToken: String,
-    resetPasswordToken: String,
-    resetPasswordExpires: Date
+    }
 }, {
     timestamps: true
 });
 
-// Indexes
-userSchema.index({ username: 'text', email: 'text' });
-userSchema.index({ status: 1 });
-userSchema.index({ isVerified: 1 });
-
 // Hash password before saving
 userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) {
-        return next();
+    const user = this;
+    if (user.isModified('password')) {
+        user.password = await bcrypt.hash(user.password, 10);
     }
-
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (error) {
-        next(error);
-    }
+    next();
 });
 
-// Methods
-userSchema.methods.comparePassword = async function (candidatePassword) {
-    return bcrypt.compare(candidatePassword, this.password);
-};
-
+// Generate auth token
 userSchema.methods.generateAuthToken = function () {
-    return jwt.sign(
-        { _id: this._id, username: this.username },
+    const user = this;
+    const token = jwt.sign(
+        { _id: user._id.toString(), username: user.username },
         process.env.JWT_SECRET,
         { expiresIn: '7d' }
     );
+    return token;
 };
 
-userSchema.methods.generateVerificationToken = function () {
-    this.verificationToken = jwt.sign(
-        { _id: this._id },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-    );
-    return this.save();
-};
-
+// Generate password reset token
 userSchema.methods.generatePasswordResetToken = function () {
-    this.resetPasswordToken = jwt.sign(
-        { _id: this._id },
+    const user = this;
+    const resetToken = jwt.sign(
+        { _id: user._id.toString(), action: 'reset_password' },
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
     );
-    this.resetPasswordExpires = Date.now() + 3600000; // 1 hour
-    return this.save();
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    return resetToken;
 };
 
-userSchema.methods.updateProfile = async function (profileData) {
-    const allowedUpdates = ['username', 'bio', 'avatar'];
-    Object.keys(profileData).forEach(update => {
-        if (allowedUpdates.includes(update)) {
-            this[update] = profileData[update];
-        }
-    });
-    return this.save();
-};
-
-userSchema.methods.updatePreferences = async function (preferences) {
-    this.preferences = { ...this.preferences, ...preferences };
-    return this.save();
-};
-
-userSchema.methods.updateStatus = async function (status) {
-    this.status = status;
-    this.lastSeen = new Date();
-    return this.save();
-};
-
-// Statics
+// Find user by credentials
 userSchema.statics.findByCredentials = async function (email, password) {
-    const user = await this.findOne({ email });
+    const User = this;
+    const user = await User.findOne({ email });
+
     if (!user) {
         throw new Error('Invalid login credentials');
     }
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
         throw new Error('Invalid login credentials');
     }
@@ -175,30 +111,18 @@ userSchema.statics.findByCredentials = async function (email, password) {
     return user;
 };
 
-userSchema.statics.search = function (query) {
-    return this.find(
-        { $text: { $search: query } },
-        { score: { $meta: 'textScore' } }
-    )
-        .select('-password')
-        .sort({ score: { $meta: 'textScore' } });
-};
-
-userSchema.statics.findOnlineUsers = function () {
-    return this.find({ status: 'online' })
-        .select('-password')
-        .sort({ username: 1 });
-};
-
-// Remove sensitive information when converting to JSON
+// Remove sensitive info when converting to JSON
 userSchema.methods.toJSON = function () {
-    const user = this.toObject();
-    delete user.password;
-    delete user.verificationToken;
-    delete user.resetPasswordToken;
-    delete user.resetPasswordExpires;
-    return user;
+    const user = this;
+    const userObject = user.toObject();
+
+    delete userObject.password;
+    delete userObject.resetPasswordToken;
+    delete userObject.resetPasswordExpires;
+
+    return userObject;
 };
 
 const User = mongoose.model('User', userSchema);
+
 module.exports = User; 
