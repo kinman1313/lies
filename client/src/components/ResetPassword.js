@@ -28,12 +28,12 @@ export default function ResetPassword() {
             setMessage('');
             setLoading(true);
 
-            const response = await axios.post(`${config.API_URL}/api/users/reset-password`, { email });
+            // Use the forgot-password endpoint to request a reset
+            await axios.post(`${config.API_URL}/api/users/forgot-password`, { email });
             setMessage('Password reset instructions have been sent to your email.');
-            console.log('Reset Token (for testing):', response.data.resetToken);
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to reset password');
             console.error('Reset password error:', err);
+            setError(err.response?.data?.error || 'Failed to send reset instructions');
         } finally {
             setLoading(false);
         }
@@ -59,26 +59,24 @@ export default function ResetPassword() {
                         </Alert>
                     )}
 
-                    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+                    <form onSubmit={handleSubmit}>
                         <TextField
-                            margin="normal"
+                            label="Email"
+                            type="email"
                             required
                             fullWidth
-                            id="email"
-                            label="Email Address"
-                            name="email"
-                            autoComplete="email"
-                            autoFocus
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
+                            margin="normal"
+                            autoComplete="email"
                         />
 
                         <LoadingButton
                             type="submit"
-                            fullWidth
                             variant="contained"
-                            sx={{ mt: 3, mb: 2 }}
+                            fullWidth
                             loading={loading}
+                            sx={{ mt: 3, mb: 2 }}
                         >
                             Reset Password
                         </LoadingButton>
@@ -88,7 +86,7 @@ export default function ResetPassword() {
                                 Back to Login
                             </Link>
                         </Box>
-                    </Box>
+                    </form>
                 </Paper>
             </Box>
         </Container>
